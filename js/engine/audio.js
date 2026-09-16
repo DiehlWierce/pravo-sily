@@ -7,8 +7,11 @@ const Sfx = (() => {
     if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } }
     if (ac && ac.state === 'suspended') ac.resume();
   }
+  // Общая громкость берётся из настроек (systems/settings.js загружается позже — поэтому проверка)
+  const master = () => (typeof Settings !== 'undefined' ? Settings.volumeScale() : 1);
   function tone(freq, dur, type = 'square', vol = 0.08, slide = 0) {
-    if (!ac) return;
+    vol *= master();
+    if (!ac || vol <= 0) return;
     const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), t + dur);
@@ -16,7 +19,8 @@ const Sfx = (() => {
     o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
   }
   function noise(dur, vol = 0.1) {
-    if (!ac) return;
+    vol *= master();
+    if (!ac || vol <= 0) return;
     const len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
     const s = ac.createBufferSource(), g = ac.createGain();

@@ -94,6 +94,8 @@ const Game = {
   // ---------- События мира ----------
   onKill(e) {
     this.stats.kills++;
+    const b = this.flags.bestiary || (this.flags.bestiary = {});   // бестиарий: сколько каких зверей повержено
+    if (e.killedByPlayer) (b[e.kind] || (b[e.kind] = { seen: true, kills: 0 })).kills++;
     if (!e.loot.crystals && !e.loot.meat && !e.keepBody) { e.looted = true; this.removed.add(e.sid); }
     if (e.killedByPlayer) {
       this.player.gainXp(e.xp);
@@ -187,7 +189,7 @@ const Game = {
   update(dt) {
     Input.update();
     this.time += dt;
-    if (this.state === 'title') { UI.updateTitle(); return; }
+    if (this.state === 'title') { if (this.menu) UI.updateMenu(); else UI.updateTitle(); return; }
 
     this.hintT = Math.max(0, this.hintT - dt);
     if (this.banner) { this.banner.t -= dt; if (this.banner.t <= 0) this.banner = null; }
@@ -203,7 +205,7 @@ const Game = {
     if (this.reader) { UI.updateReader(); return; }
     if (this.menu) { UI.updateMenu(); return; }
     if (this.dialog) { UI.updateDialog(dt); this.updateCamera(); return; }
-    if (Input.pressed('start') && !this.cutscene) { this.menu = { sel: 0 }; return; }
+    if (Input.pressed('start') && !this.cutscene) { UI.openMenu(); return; }
 
     for (const t of this.timers) { t.t -= dt; if (t.t <= 0) { t.done = true; t.fn(); } }
     this.timers = this.timers.filter(t => !t.done);
@@ -234,6 +236,7 @@ const Game = {
     if (!last || dist(last.x, last.y, p.x, p.y) > 8) { this.trail.push({ x: p.x, y: p.y }); if (this.trail.length > 400) this.trail.shift(); }
 
     this.emitSmoke();
+    this.noteSeenBeasts();
 
     // Встал на коврик у выхода — выходим на улицу
     if (World.theme === 'interior' && this.enterCd <= 0 && !this.locked &&
@@ -241,6 +244,16 @@ const Game = {
 
     Events.emit('tick', dt);
     this.updateCamera();
+  },
+  // Бестиарий: зверь попадает в записи, когда герой его увидел
+  noteSeenBeasts() {
+    if ((this.seenT = (this.seenT || 0) - 1) > 0) return;
+    this.seenT = 20;
+    const b = this.flags.bestiary || (this.flags.bestiary = {}), p = this.player;
+    for (const e of this.enemies) {
+      if (!e.alive || e.dormant || e.disguised || (b[e.kind] && b[e.kind].seen)) continue;
+      if (dist(e.x, e.y, p.x, p.y) < 130 && World.sight(p.x, p.y - 6, e.x, e.y - 6)) b[e.kind] = { seen: true, kills: 0 };
+    }
   },
   // Дым из труб по списку сцены
   emitSmoke() {
@@ -267,7 +280,7 @@ const Game = {
     this.labels = [];
     if (this.state === 'title') UI.titleShapes();
     else {
-      const sh = FX.shake ? rrange(-FX.shake, FX.shake) * 0.5 : 0;
+      const sh = FX.shake && Settings.get('shake') ? rrange(-FX.shake, FX.shake) * 0.5 : 0;
       const cam = { x: this.cam.x + sh, y: this.cam.y + sh };
       World.draw(bctx, cam, this.time);
       // Рисуем только то, что в кадре, по глубине (ниже на экране — ближе)
@@ -290,7 +303,7 @@ const Game = {
     dctx.imageSmoothingEnabled = false;
     dctx.drawImage(buffer, 0, 0, screen.width, screen.height);
 
-    if (this.state === 'title') { UI.titleText(); return; }
+    if (this.state === 'title') { UI.titleText(); if (this.menu) UI.menuText(); return; }
     if (this.state === 'play') UI.hudText();
     if (this.dialog) UI.dialogText();
     if (this.menu) UI.menuText();

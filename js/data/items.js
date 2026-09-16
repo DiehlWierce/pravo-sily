@@ -63,3 +63,12 @@ const OBJ_KINDS = {
   barrel: { mass: 'medium', hw: 4, hh: 4, dmg: 1 },
   boulder: { mass: 'heavy', hw: 8, hh: 6, dmg: 2 },
 };
+
+// Разделы меню вещей. Медяки показаны в шапке меню, метательные ножи — в снаряжении
+const ITEM_CATS = [
+  { id: 'all', name: 'Всё' },
+  { id: 'food', name: 'Еда и лечение', items: ['bread', 'meatRaw', 'meatCooked', 'herbs', 'salve0'] },
+  { id: 'goods', name: 'Добыча и товар', items: ['crystals', 'junk', 'apples', 'cloth', 'vial', 'fish', 'candles', 'nails', 'pot', 'wine'] },
+  { id: 'quest', name: 'Для заданий', items: ['medicine', 'pendant', 'scroll', 'letter', 'cargo', 'purse', 'sealedLetter'] },
+];
+const ITEMS_NOT_LISTED = ['coins', 'knives'];

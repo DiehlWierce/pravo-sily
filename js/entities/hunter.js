@@ -198,6 +198,6 @@ class Hunter extends Enemy {
       for (let i = 1; i < 5; i++) { const t = i / 5; ctx.fillRect(Math.round(lerp(this.x - cam.x, this.lifted.x - cam.x, t)), Math.round(lerp(this.y - cam.y - 6, this.lifted.y - this.lifted.z - cam.y, t)), 1, 1); }
     }
     const p = Game.player;
-    if (this.boss && this.state !== 'panting' && dist(p.x, p.y, this.x, this.y) < 140) Game.labels.push({ x: this.x, y: this.y - 22, text: `ур.${this.lvl}`, color: '#ff9080' });
+    if (this.boss && Settings.get('levels') && this.state !== 'panting' && dist(p.x, p.y, this.x, this.y) < 140) Game.labels.push({ x: this.x, y: this.y - 22, text: `ур.${this.lvl}`, color: '#ff9080' });
   }
 }

@@ -8,7 +8,7 @@ const UI = {};
 Object.assign(UI, {
   updateDialog(dt) {
     const d = Game.dialog, line = d.lines[d.i], before = Math.floor(d.chars);
-    d.chars = Math.min(line.text.length, d.chars + dt * 50);
+    d.chars = Math.min(line.text.length, d.chars + dt * Settings.textCharsPerSecond());
     if (Math.floor(d.chars) !== before && Math.floor(d.chars) % 3 === 0) Sfx.blip();
     const full = d.chars >= line.text.length;
     if (full && line.choices) {

@@ -84,7 +84,7 @@ class Watcher extends NPC {
   draw(ctx, cam) {
     if (this.hidden) return;
     const p = Game.player;
-    if (this.awake && Theft.showCone(this) && dist(p.x, p.y, this.x, this.y) < 140)
+    if (this.awake && Settings.get('cones') && Theft.showCone(this) && dist(p.x, p.y, this.x, this.y) < 140)
       drawCone(ctx, cam, this, this.angle, this.half, this.range, this.seesPlayer() ? 'rgba(255,70,50,0.22)' : 'rgba(255,220,120,0.12)');
     drawHuman(ctx, cam, this, { shake: this.warn > 0 });
     if (this.suspectT > 0) drawIcon(ctx, cam, this, '!', '#ffb040');
@@ -240,7 +240,7 @@ class Chaser extends NPC {
       g.addColorStop(0, 'rgba(255,200,100,0.25)'); g.addColorStop(1, 'rgba(255,200,100,0)');
       ctx.fillStyle = g; ctx.fillRect(this.x - cam.x - 34, this.y - cam.y - 42, 68, 68);
     }
-    if (this.active && this.showCone !== false && this.state !== 'chase')
+    if (this.active && this.showCone !== false && Settings.get('cones') && this.state !== 'chase')
       drawCone(ctx, cam, this, this.angle, this.half, this.range, this.state === 'alert' ? 'rgba(255,70,50,0.25)' : 'rgba(255,220,120,0.12)');
     drawHuman(ctx, cam, this);
     if (this.lantern) drawSpr(ctx, Art.spr.lantern, this.x - cam.x + (this.lr === 'r' ? 4 : -7), this.y - cam.y - 7);

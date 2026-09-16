@@ -63,6 +63,7 @@ Object.assign(UI, {
     Game._wp = { x: clamp(cx - Math.cos(a) * 16, 30, W - 30), y: cy - Math.sin(a) * 12 - 3, label: wp.label };
   },
   hudText() {
+    if (Game.menu) return;
     const p = Game.player;
     const q = p.quickItem && Inv.count(p.quickItem);
     text('E', 6, H - 21, { size: 5, color: q ? '#ffe080' : '#7a6a80' });

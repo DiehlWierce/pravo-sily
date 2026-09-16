@@ -175,7 +175,7 @@ class Enemy {
     if ((this.state === 'panting' || this.state === 'tired') && rnd() < 0.15)
       FX.add({ x: this.x + rrange(-5, 5), y: this.y - img.height - 2, vx: 0, vy: -10, life: 0.5, max: 0.5, color: '#dde', size: 1 });
     const p = Game.player;
-    if (!this.hideLevel && !this.dormant && dist(p.x, p.y, this.x, this.y) < 120)
+    if (!this.hideLevel && !this.dormant && Settings.get('levels') && dist(p.x, p.y, this.x, this.y) < 120)
       Game.labels.push({ x: this.x, y: this.y - img.height - this.z - 8, text: `ур.${this.lvl}`, color: this.lvl > p.level ? '#ff9080' : '#d8d0c0' });
   }
 }

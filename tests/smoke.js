@@ -215,6 +215,33 @@
     ok('на рынке города 10 прилавков для кражи', Game.props.filter(c => c instanceof Container && c.kind === 'stall').length === 10);
   });
 
+  // ---------- Меню ----------
+  safe('Меню', () => {
+    Game.loadScene('city'); skip();
+    Inv.add('herbs', 2); Inv.add('junk', 3); Game.player.hp = 3;
+    UI.openMenu();
+    const opened = [];
+    for (let i = 0; i < MENU_SECTIONS.length; i++) {
+      const s = MENU_SECTIONS[i]; if (s.action) continue;
+      Game.menu = { sec: i, sel: 0, cat: 0, focus: 'content' };
+      const c = UI.menuContent(Game.menu); Game.draw();
+      opened.push(`${s.id}:${c.rows.length}`);
+    }
+    ok('меню: все разделы открываются и рисуются', opened.length === 7, opened.join(' '));
+    Game.menu = { sec: 0, sel: 0, cat: 1, focus: 'content' };
+    const food = UI.menuContent(Game.menu).rows;
+    ok('вещи разложены по вкладкам: в «Еде» трава, хлама нет', food.some(r => r.label === ITEMS.herbs.name) && !food.some(r => r.label === ITEMS.junk.name));
+    const hp = Game.player.hp; food.find(r => r.label === ITEMS.herbs.name).a();
+    ok('трава используется прямо из меню', Game.player.hp > hp && Inv.count('herbs') === 1);
+    ok('в разделе «Задания» есть поручения', UI.menuContent({ sec: 3, sel: 0, focus: 'content' }).rows.some(r => r.header && r.label === 'Выполнено'));
+    const vol = Settings.get('volume'); Settings.change(Settings.DEFS[0], -1);
+    ok('настройки меняются и запоминаются', Settings.get('volume') === vol - 1 && JSON.parse(localStorage.getItem(Settings.key)).volume === vol - 1);
+    Settings.change(Settings.DEFS[0], 1);
+    Game.menu = null;
+    Game.state = 'title'; UI.openMenu('settings'); Game.draw(); Game.menu = null; Game.state = 'play';
+    ok('настройки открываются с титульного экрана', true);
+  });
+
   // ---------- Старое сохранение (v3) ----------
   safe('Сохранения', () => {
     const old = { scene: 'slums', x: 100, y: 100, objective: 'x', returnTo: null,
