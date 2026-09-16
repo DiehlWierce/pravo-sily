@@ -113,6 +113,38 @@ class Spike {
   }
 }
 
+// ---------- Снаряжение ----------
+const WEAPONS = {
+  knife: { name: 'Отцовский нож', dmg: 1, reach: 11, desc: 'Короткий, потёртый. Режет лучше, чем кажется.' },
+  shortsword: { name: 'Короткий меч', dmg: 2, reach: 13, price: 60, rank: 'G', desc: 'Простая сталь. Урон заметно выше ножа.' },
+  cleaver: { name: 'Боевой тесак', dmg: 3, reach: 13, price: 150, rank: 'F-', desc: 'Тяжёлый клинок охотников на кабанов.' },
+  huntblade: { name: 'Клинок охотника', dmg: 4.5, reach: 15, price: 320, rank: 'E-', desc: 'Гильдейская работа. Длинный, злой, точный.' },
+};
+const ARMORS = {
+  rags: { name: 'Рваная рубаха', def: 0, desc: 'Защищает от холода. От когтей — нет.' },
+  quilted: { name: 'Стёганка', def: 1, price: 50, rank: 'G', desc: 'Удар зверя ослабляется на 1.' },
+  leather: { name: 'Кожаный доспех', def: 2, price: 140, rank: 'F-', desc: 'Удар зверя ослабляется на 2.' },
+  mail: { name: 'Кольчуга', def: 3, price: 360, rank: 'E-', slow: 0.92, desc: 'Удар ослабляется на 3, но чуть медленнее бег.' },
+};
+
+// Метательный нож: летит по прямой, пробивает только уязвимого зверя
+class ThrownKnife {
+  constructor(x, y, dx, dy, dmg) { Object.assign(this, { x, y, vx: dx * 240, vy: dy * 240, dmg, life: 0.6 }); }
+  update(dt) {
+    this.x += this.vx * dt; this.y += this.vy * dt; this.life -= dt;
+    if (this.life <= 0 || World.solidFly(World.atPx(this.x, this.y))) { this.remove = true; puff(this.x, this.y, '#aaa', 3); return; }
+    for (const e of Game.enemies) {
+      if (!e.alive || e.z > 6 || dist(e.x, e.y - 4, this.x, this.y) > e.r + 4) continue;
+      e.takeHit(this.dmg, 'knife', Math.sign(this.vx), Math.sign(this.vy)); this.remove = true; return;
+    }
+  }
+  draw(ctx, cam) {
+    const n = norm(this.vx, this.vy), x = Math.round(this.x - cam.x), y = Math.round(this.y - cam.y - 5);
+    ctx.fillStyle = '#d8dce0'; for (let i = 0; i < 5; i++) ctx.fillRect(Math.round(x - n.x * i), Math.round(y - n.y * i), 1, 1);
+    ctx.fillStyle = '#6a4a2a'; ctx.fillRect(Math.round(x - n.x * 5), Math.round(y - n.y * 5), 1, 1);
+  }
+}
+
 // ---------- Герой ----------
 const STAT_ORDER = ['str', 'hp', 'sta'];
 const STAT_NAMES = { str: 'Сила', hp: 'Здоровье', sta: 'Выносливость' };
@@ -126,10 +158,13 @@ class Player {
       dashT: 0, dashCd: 0, dashDir: { x: 1, y: 0 }, atkT: 0, atkHit: new Set(), invul: 0, kvx: 0, kvy: 0,
       walk: 0, moving: false, holdT: 0, holdTarget: null, liftT: 0, speed: 72, toxT: 0, msgT: 0,
       implant: null, abilities: { push: false },
-      inv: { coins: 0, junk: [], goods: [], bread: 0, medicine: 0, meatRaw: 0, meatCooked: 0, herbs: 0, crystals: 0, scroll: false, pendant: false },
+      inv: { coins: 0, junk: [], goods: [], bread: 0, medicine: 0, meatRaw: 0, meatCooked: 0, herbs: 0, crystals: 0, scroll: false, pendant: false, salve0: 0, quest: { letter: 0, cargo: 0 } },
+      gear: { weapon: 'knife', armor: 'rags' }, knives: 0,
     });
   }
-  get damage() { return 1 + 0.5 * (this.stats.str - 1); }
+  get weapon() { return WEAPONS[this.gear.weapon] || WEAPONS.knife; }
+  get armor() { return ARMORS[this.gear.armor] || ARMORS.rags; }
+  get damage() { return this.weapon.dmg + 0.5 * (this.stats.str - 1); }
   get staminaRegen() { return 22 + 5 * (this.stats.sta - 1); }
   xpNext() { return Math.round(15 * Math.pow(this.level, 1.5)); }
   gainXp(n) {
@@ -182,7 +217,8 @@ class Player {
       moveBody(this, this.dashDir.x * 235 * dt, this.dashDir.y * 235 * dt);
       if (rnd() < 0.6) FX.parts.push({ x: this.x, y: this.y - 4, vx: 0, vy: 0, life: 0.2, max: 0.2, color: '#6b6f5a', size: 2 });
     } else if (this.moving) {
-      moveBody(this, mx * this.speed * dt, my * this.speed * dt);
+      const spd = this.speed * (this.armor.slow || 1);
+      moveBody(this, mx * spd * dt, my * spd * dt);
       this.walk += dt * 8;
     }
 
@@ -205,7 +241,7 @@ class Player {
     if (Input.pressed('r')) this.useQuick();
 
     if (this.atkT > 0.06) {
-      const hx = this.x + this.face.x * 11, hy = this.y - 4 + this.face.y * 11;
+      const reach = this.weapon.reach, hx = this.x + this.face.x * reach, hy = this.y - 4 + this.face.y * reach;
       for (const e of Game.enemies) if (e.alive && !this.atkHit.has(e) && e.z < 6 && dist(e.x, e.y - 4, hx, hy) < e.r + 8) {
         this.atkHit.add(e); e.takeHit(this.damage, 'knife', this.face.x, this.face.y);
       }
@@ -228,6 +264,13 @@ class Player {
     this.atkT = 0.2; this.atkHit = new Set(); Sfx.slash();
   }
   ability() {
+    if (this.knives > 0 && this.hasKnife !== undefined) {
+      if (this.atkT > 0 || this.knifeCd > Game.time || !this.spend(6)) return;
+      this.knives--; this.knifeCd = Game.time + 0.35; Sfx.throw();
+      Game.projectiles.push(new ThrownKnife(this.x + this.face.x * 6, this.y - 2 + this.face.y * 6, this.face.x, this.face.y, 1.5 + 0.5 * (this.stats.str - 1)));
+      if (this.knives === 0) Game.hint('Метательные ножи кончились. Купить у оружейника.', 2.5);
+      return;
+    }
     if (!this.abilities.push && Game.time > this.msgT) { this.msgT = Game.time + 2; Game.hint('Во мне нет никакой силы. Только нож и ноги.', 1.8); }
   }
   // Кнопка быстрого действия: что на неё назначено в меню, то и применяется
@@ -243,6 +286,7 @@ class Player {
 
   hurt(dmg, dx, dy, silent) {
     if (!this.alive || (!silent && (this.invul > 0 || this.dashT > 0)) || Game.flags.godmode) return;
+    if (!silent) dmg = Math.max(1, dmg - this.armor.def);   // одежда гасит часть удара
     this.hp -= dmg; if (!silent) this.invul = 1;
     if (dx || dy) { const n = norm(dx, dy); this.kvx = n.x * 160; this.kvy = n.y * 160; }
     Sfx.hurt(); FX.shake = Math.max(FX.shake, 4); FX.burst(this.x, this.y - 6, '#d02040', 6, 50);
@@ -299,7 +343,8 @@ class Enemy {
   guard(dmg, dx, dy, key, text) {
     if (dmg >= this.hp) return false;
     Sfx.clang(); FX.burst(this.x + dx * 6, this.y - 6, '#fff', 5, 45);
-    const p = Game.player; p.kvx = -dx * 150; p.kvy = -dy * 150;
+    const p = Game.player;
+    if (dist(p.x, p.y, this.x, this.y) < 30) { p.kvx = -dx * 150; p.kvy = -dy * 150; }
     Game.once(key, () => Game.hint(text, 4.5));
     return true;
   }
@@ -639,7 +684,11 @@ class Spot {
     if (this.used || (this.cond && !this.cond()) || dist(p.x, p.y, this.x, this.y) > this.r) return null;
     return { key: this, x: this.x, y: this.y - 18, label: typeof this.label === 'function' ? this.label() : this.label, hold: this.hold, done: () => this.fn(this) };
   }
-  draw() { }
+  draw(ctx, cam) {
+    if (!this.sprite || this.used) return;
+    const img = Art.spr[this.sprite];
+    drawSpr(ctx, img, this.x - img.width / 2 - cam.x, this.y - img.height - cam.y);
+  }
 }
 
 class Campfire {

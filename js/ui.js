@@ -100,9 +100,18 @@ const UI = {
     if (v.crystals) add('crystal', 'Кристаллы зверей', v.crystals, 'Тёплые, будто живые. Говорят, их носят дворяне и купцы, а стоят они целое состояние.');
     if (v.scroll) add('scroll', 'Обрывок свитка', 1, 'Потрёпанный, в пятнах крови и копоти. Нашёл в сумке охотника.', () => Story.readScroll(), 'scroll');
     if (v.pendant) add('pendant', 'Блестящая подвеска', 1, 'Тёплая на ощупь. Из-за неё всё и случилось.');
+    if (p.hasKnife) add('iconSword', p.weapon.name, 1, `Оружие. Урон ${p.damage}. ${p.weapon.desc}`);
+    if (p.gear.armor !== 'rags') add('iconArmor', p.armor.name, 1, `Одежда. ${p.armor.desc}`);
+    if (p.knives) add('iconKnives', 'Метательные ножи', p.knives, 'K — метнуть. Пробивают только уязвимого зверя, как и нож.');
+    if (v.salve0) add('salve', 'Мазь нулевой ступени', v.salve0, 'Затягивает царапины и неглубокие раны: +6 здоровья.', () => {
+      if (p.hp >= p.maxHp) { Game.hint('Раны и так затянуты.', 1.5); return; }
+      v.salve0--; p.hp = Math.min(p.maxHp, p.hp + 6); Sfx.crystal(); Game.hint('Мазь холодит, раны стягиваются.', 1.8);
+    }, 'salve0');
+    if (v.quest && v.quest.letter) add('scroll', 'Письмо гильдии', 1, 'Для извозчика Ждана на стоянке.');
+    if (v.quest && v.quest.cargo) add('sack', 'Груз пропавшего обоза', 1, 'Вернуть клерку гильдии.');
     for (const id of (typeof Quests !== 'undefined' ? Quests.active() : [])) {
       const d = QUEST_DEFS[id];
-      add('scroll', d.name, 0, `Заказ гильдии [${d.rank}]. ${d.desc}\nПрогресс: ${Quests.progress(id)}/${d.need}. Награда: ${d.coins} медяков.`);
+      add('scroll', d.name, 0, `Заказ [${d.rank}]. ${d.desc}\nПрогресс: ${Quests.progress(id)}/${Quests.needOf(id)}. Награда: ${d.coins} медяков.`);
     }
     E.push({ name: 'Продолжить игру', desc: 'Закрыть вещи и вернуться в игру.', sys: 'resume' });
     E.push({ name: 'Начать игру', desc: 'Начать заново с самого начала. Текущее сохранение будет стёрто.', sys: 'newgame' });
@@ -132,29 +141,33 @@ const UI = {
     }
     if (Input.pressed('l')) { Game.toTitle(); }
   },
+  menuWindow(E, m) { const top = clamp(m.sel - 6, 0, Math.max(0, E.length - 12)); return { top, rows: E.slice(top, top + 12) }; },
   menuShapes() {
     box(14, 12, W - 28, H - 24, 0.95);
-    const p = Game.player, E = this.invEntries(), m = Game.menu;
+    const p = Game.player, all = this.invEntries(), m = Game.menu, win = this.menuWindow(all, m), E = win.rows;
     bctx.fillStyle = '#000a'; bctx.fillRect(22, 44, 110, 3);
     bctx.fillStyle = '#c8b0ff'; bctx.fillRect(22, 44, Math.round(110 * p.xp / p.xpNext()), 3);
     for (let i = 0; i < E.length; i++) {
       const e = E[i], y = 62 + i * 13;
-      if (i === m.sel) { bctx.fillStyle = 'rgba(255,224,128,0.12)'; bctx.fillRect(20, y - 5, 156, 12); }
+      if (i + win.top === m.sel) { bctx.fillStyle = 'rgba(255,224,128,0.12)'; bctx.fillRect(20, y - 5, 156, 12); }
       if (!e.icon) continue;
       const img = Art.spr[e.icon]; drawSpr(bctx, img, 29 - img.width / 2, y + 1 - img.height / 2);
     }
   },
   menuText() {
-    const p = Game.player, E = this.invEntries(), m = Game.menu;
+    const p = Game.player, all = this.invEntries(), m = Game.menu, win = this.menuWindow(all, m), E = win.rows;
     text(`Ур. ${p.level}`, 22, 18, { size: 9, color: '#bff8ff' });
     text(`опыт ${p.xp}/${p.xpNext()}`, 70, 21, { size: 6, color: '#c8b0ff' });
     text(`Сила ${p.stats.str} · Здоровье ${p.stats.hp} · Выносл. ${p.stats.sta}`, 22, 31, { size: 6, color: '#e8e0d0' });
+    if (Game.flags.guildMember) text(`Ранг ${Quests.rank()} · репутация ${Quests.rep()}`, W - 24, 21, { size: 6, align: 'right', color: '#ffe080' });
     if (!E.length) text('Пусто. Только нож.', 26, 58, { size: 7, color: '#aaa' });
+    if (win.top > 0) text('▲', 100, 50, { size: 5, color: '#889' });
+    if (win.top + 12 < all.length) text('▼', 100, 58 + 12 * 13 - 4, { size: 5, color: '#889' });
     E.forEach((e, i) => {
-      text(e.name, 38, 58 + i * 13, { size: 6.5, color: i === m.sel ? '#ffe080' : e.sys ? '#9ad8ff' : '#e8e0d0' });
+      text(e.name, 38, 58 + i * 13, { size: 6.5, color: i + win.top === m.sel ? '#ffe080' : e.sys ? '#9ad8ff' : '#e8e0d0' });
       if (e.count) text('×' + e.count, 172, 58 + i * 13, { size: 6.5, align: 'right', color: '#aaa' });
     });
-    const sel = E[clamp(m.sel, 0, E.length - 1)];
+    const sel = all[clamp(m.sel, 0, all.length - 1)];
     if (sel) {
       wrap(sel.desc, 112, 6).slice(0, 8).forEach((l, i) => text(l, 186, 58 + i * 9, { size: 6, color: '#d8d0c0' }));
       if (sel.use) text('Space — использовать', 186, 130, { size: 6, color: '#ffe080' });

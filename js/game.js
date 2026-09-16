@@ -33,6 +33,9 @@ const Game = {
     this.save();
   },
   loadScene(name, pos) {
+    // В охотничьих местах звери и травы возвращаются при каждом заходе — есть где гриндить
+    if (SCENES[name].respawn) for (const id of [...this.removed])
+      if (id.startsWith(name + ':') && /:(rabbit|boar|spiker|jumper|thrower|herb|berries):/.test(id)) this.removed.delete(id);
     World.load(SCENES[name]);
     Object.assign(this, { objects: [], enemies: [], npcs: [], pickups: [], props: [], projectiles: [], tags: {}, roles: {}, trail: [], camFocus: null, bossBar: null, waypoint: null });
     let exitPos = null;
@@ -224,10 +227,11 @@ const Game = {
   // ---------- Сохранение ----------
   hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } },
   save() {
+    if (Story.beforeSave) Story.beforeSave();   // сохранение фиксирует упущенные возможности (например, помощь извозчику)
     const p = this.player;
     const data = {
       scene: World.name, x: p.x, y: p.y, objective: this.objective, returnTo: this.returnTo,
-      player: { level: p.level, xp: p.xp, stats: p.stats, maxHp: p.maxHp, hp: p.hp, maxStamina: p.maxStamina, stamina: p.stamina, inv: p.inv, implant: p.implant, abilities: p.abilities, hasKnife: p.hasKnife, quickItem: p.quickItem },
+      player: { level: p.level, xp: p.xp, stats: p.stats, maxHp: p.maxHp, hp: p.hp, maxStamina: p.maxStamina, stamina: p.stamina, inv: p.inv, implant: p.implant, abilities: p.abilities, hasKnife: p.hasKnife, quickItem: p.quickItem, gear: p.gear, knives: p.knives },
       flags: this.flags, removed: [...this.removed], stats: this.stats,
     };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { }
@@ -237,6 +241,9 @@ const Game = {
     if (!d) { this.newGame(); return; }
     this.flags = d.flags; this.removed = new Set(d.removed); this.stats = d.stats; this.returnTo = d.returnTo;
     this.player = new Player(d.x, d.y); Object.assign(this.player, d.player);
+    const pl = this.player;   // старые сохранения без новых полей
+    pl.inv.quest = pl.inv.quest || { letter: 0, cargo: 0 };
+    pl.gear = pl.gear || { weapon: 'knife', armor: 'rags' }; pl.knives = pl.knives || 0; pl.inv.salve0 = pl.inv.salve0 || 0;
     this.checkpoint = null;
     this.loadScene(d.scene, { x: d.x, y: d.y });
     this.objective = d.objective; this.state = 'play';

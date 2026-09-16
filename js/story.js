@@ -118,9 +118,13 @@ const Story = {
     if (this.busy()) { Game.hint('Не сейчас!', 1.2); return false; }
     if (to === 'road' && !Game.flags.chapterEnd) { Game.hint('Сначала надо добраться до хижины и перевести дух.', 3); return false; }
     if (to === 'city' && !Game.flags.inCity) { Game.hint('Стража не пускает. Сначала договорись у ворот.', 3); return false; }
+    if (to === 'gate' && !Game.flags.ridePaid) { Game.hint('Пешком до ворот далеко и опасно. Сначала — извозчик.', 3); return false; }
+    if (to === 'grove' && Quests.rankIndex() < 3) { Game.hint('Егерь не пускает: в Дальнюю рощу — с ранга F- и выше.', 3); return false; }
+    if (to === 'marsh' && Quests.rankIndex() < 6) { Game.hint('На Гнилые болота гильдия пускает только с ранга E-.', 3); return false; }
     return true;
   },
   canExit() { return true; },
+  beforeSave() { C2.beforeSave(); },
   canLoot() { return !this.busy(); },
   showCone(w) { return Game.props.some(c => c instanceof Container && !c.used && c.owners && c.owners.includes(w.role)); },
   onTalkEnemy() { Game.hint('Он узнал меня!', 2); },
@@ -425,6 +429,7 @@ const Story = {
 
   onSceneLoad(name) {
     C2.onSceneLoad(name);
+    Quests.onSceneLoad();
     if (name === 'guild') {
       const b = Game.tags.board;
       if (b) Game.addSpot(b.x, b.y + 12, { r: 20, label: 'Space: доска заказов', fn: () => C2.board() });
@@ -488,6 +493,7 @@ const Story = {
     if (this.step === 'restHunter') { this.step = 'sleepHunter'; Game.objective = 'Поспать у костра'; }
   },
   onRest() {
+    C2.onRest();
     if (World.name !== 'forest') return;
     const p = this.p;
     if (this.step === 'night4') {

@@ -244,7 +244,7 @@ const SCENES = {
   // ======================= ГЛАВА 2: ДОРОГА И ГОРОД =======================
   // Тракт: длинная дорога с колеями, развилками и опасными обочинами
   road: {
-    name: 'road', theme: 'forest', w: 124, h: 36, fill: 'T',
+    name: 'road', theme: 'forest', w: 124, h: 36, fill: 'T', respawn: true,
     build(P) {
       const { set, rect, circle, get, rng } = P;
       const path = [[0, 20], [10, 22], [20, 18], [32, 14], [44, 17], [56, 22], [68, 26], [80, 22], [92, 16], [104, 19], [118, 22]];
@@ -258,6 +258,7 @@ const SCENES = {
       }
       // Обочины и привалы
       circle(20, 26, 5, '.'); circle(46, 9, 5, '.'); circle(72, 30, 5, '.'); circle(96, 10, 5, '.');
+      circle(112, 28, 4, '.'); rect(45, 2, 47, 6, '.');
       const spawns = [
         ['gateway', 1, 20, { to: 'forest', at: [110, 20], label: 'назад в чащу' }],
         ['gateway', 122, 22, { to: 'camp', at: [3, 14], label: 'к дыму костра' }],
@@ -267,6 +268,8 @@ const SCENES = {
         ['boar', 28, 17, { lvl: 2 }], ['rabbit', 50, 20], ['rabbit', 84, 24], ['boar', 100, 22, { lvl: 2 }],
         ['herb', 24, 27], ['herb', 94, 11], ['berries', 48, 10], ['berries', 76, 29],
         ['campfire', 46, 9, { save: 'road' }],
+        ['campfire', 112, 28, { save: 'roadEnd' }],
+        ['gateway', 46, 3, { to: 'village', at: [28, 36], label: 'тропа к хутору' }],
         ['crate', 21, 24], ['barrel', 22, 27], ['barrel', 95, 12],
         ['container', 21, 24, { name: 'брошенный ящик', hold: 0.9, loot: { coins: 3 } }],
         ['container', 95, 12, { name: 'бочку у обочины', hold: 0.9, loot: { herbs: 1 } }],
@@ -294,10 +297,8 @@ const SCENES = {
         ['gateway', 42, 14, { to: 'gate', at: [3, 14], label: 'к городским воротам' }],
         ['npc', 18, 11, { who: 'carter', role: 'carter', face: 'r' }],
         ['npc', 24, 18, { who: 'villager', role: 'campGuest', face: 'l' }],
-        ['campfire', 21, 15, { save: 'camp', lit: true }],
         ['crate', 15, 12], ['barrel', 26, 12], ['barrel', 14, 17],
         ['container', 15, 12, { name: 'мешки в телеге', hold: 1.2, loot: { coins: 2 }, watched: true, owners: ['carter'] }],
-        ['spiker', 33, 20, { lvl: 3, tag: 'campSpikerA' }], ['spiker', 30, 9, { lvl: 3, tag: 'campSpikerB' }],
         ['herb', 12, 19], ['berries', 28, 8],
         ['mark', 17, 13, { tag: 'cartSpot' }],
       ];
@@ -375,6 +376,8 @@ const SCENES = {
         ['npc', 20, 33, { who: 'boy', role: 'cityBoy', face: 'r' }],
         ['watcher', 52, 30, { who: 'guard', role: 'cityGuard', look: [2, 3.5], angles: [Math.PI, Math.PI / 2, 0] }],
         ['npc', 62, 22, { who: 'hunterB', role: 'cityHunter', face: 'l' }],
+        ['npc', 26, 13, { who: 'smith', role: 'armorer', face: 'l' }],
+        ['npc', 11, 13, { who: 'apothecary', role: 'cityHealer', face: 'r' }],
         ['container', 12, 10, { watched: true, name: 'хлеб', icon: 'bread', owners: ['cityBaker'], loot: { bread: 1 } }],
         ['container', 18, 10, { watched: true, name: 'яблоки', icon: 'apple', owners: ['cityFruiter'], loot: { goods: { name: 'Яблоки', value: 2, icon: 'apple' } } }],
         ['crate', 28, 20], ['barrel', 50, 22], ['barrel', 16, 24], ['crate', 60, 34],
@@ -413,7 +416,7 @@ const SCENES = {
 
   // Охотничьи угодья: сюда гильдия шлёт новичков
   hunt: {
-    name: 'hunt', theme: 'forest', w: 84, h: 42, fill: 'T',
+    name: 'hunt', theme: 'forest', w: 84, h: 42, fill: 'T', respawn: true,
     build(P) {
       const { set, rect, circle, get, rng } = P;
       const glades = [[8, 20, 6], [20, 12, 6], [30, 26, 7], [44, 16, 7], [56, 28, 6], [68, 18, 7], [76, 30, 5]];
@@ -429,6 +432,7 @@ const SCENES = {
       }
       const spawns = [
         ['gateway', 1, 20, { to: 'city', at: [69, 9], label: 'назад в город' }],
+        ['gateway', 82, 28, { to: 'grove', at: [2, 22], label: 'в Дальнюю рощу' }],
         ['campfire', 10, 22, { save: 'hunt' }],
         ['rabbit', 14, 18], ['rabbit', 22, 10], ['rabbit', 34, 28], ['rabbit', 48, 14], ['rabbit', 60, 30], ['rabbit', 72, 20],
         ['boar', 18, 14, { lvl: 2 }], ['boar', 32, 24, { lvl: 3 }], ['boar', 58, 26, { lvl: 3 }], ['boar', 70, 16, { lvl: 3 }],
@@ -449,5 +453,106 @@ const SCENES = {
       }
       return spawns;
     },
+  },
+};
+
+// Дикая местность из полян и петляющей тропы: общий генератор для рощи и болот
+function wild(o) {
+  return {
+    name: o.name, theme: 'forest', w: o.w, h: o.h, fill: 'T', respawn: true,
+    build(P) {
+      const { set, rect, circle, get, rng } = P;
+      for (const [x, y, r] of o.glades) circle(x, y, r, '.');
+      const protect = new Set();
+      for (let i = 1; i < o.path.length; i++) {
+        const [ax, ay] = o.path[i - 1], [bx, by] = o.path[i], n = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 2;
+        for (let k = 0; k <= n; k++) {
+          const x = Math.round(lerp(ax, bx, k / n)), y = Math.round(lerp(ay, by, k / n));
+          for (let d = -1; d <= 1; d++) { set(x, y + d, d === 0 ? ':' : (get(x, y + d) === 'T' ? '.' : get(x, y + d))); protect.add(`${x},${y + d}`); }
+        }
+      }
+      const spawns = o.spawns.slice();
+      for (const [, sx, sy] of spawns) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) protect.add(`${sx + dx},${sy + dy}`);
+      const sparse = o.glades.map(([x, y, r]) => [x, y, r - 1]);
+      for (let y = 1; y < o.h - 1; y++) for (let x = 1; x < o.w - 1; x++) {
+        if (get(x, y) !== '.' || protect.has(`${x},${y}`)) continue;
+        const k = sparse.some(([cx, cy, r]) => (x - cx) ** 2 + (y - cy) ** 2 < r * r) ? 0.3 : 1;
+        const r = rng();
+        if (o.water && r < o.water * k) set(x, y, '~');
+        else if (r < (o.water || 0) * k + 0.06 * k) set(x, y, 'T');
+        else if (r < (o.water || 0) * k + 0.15 * k) set(x, y, 'b');
+        else if (r < (o.water || 0) * k + 0.18 * k) set(x, y, 'O');
+        else if (r < 0.28) set(x, y, 'q');
+        else if (r < 0.42) set(x, y, ',');
+      }
+      return spawns;
+    },
+  };
+}
+
+SCENES.grove = wild({
+  name: 'grove', w: 86, h: 44,
+  glades: [[8, 22, 6], [22, 12, 7], [30, 30, 7], [44, 20, 8], [58, 32, 7], [62, 12, 8], [76, 22, 7]],
+  path: [[0, 22], [8, 22], [22, 13], [30, 29], [44, 20], [58, 31], [62, 13], [76, 22], [85, 22]],
+  spawns: [
+    ['gateway', 1, 22, { to: 'hunt', at: [80, 28], label: 'назад в угодья' }],
+    ['gateway', 84, 22, { to: 'marsh', at: [2, 20], label: 'на Гнилые болота' }],
+    ['campfire', 10, 25, { save: 'grove' }],
+    ['spiker', 20, 10, { lvl: 5 }], ['spiker', 46, 24, { lvl: 6 }], ['spiker', 74, 20, { lvl: 6 }], ['spiker', 32, 33, { lvl: 5 }],
+    ['jumper', 24, 15, { lvl: 5 }], ['jumper', 42, 17, { lvl: 6 }], ['jumper', 60, 30, { lvl: 6 }], ['jumper', 64, 14, { lvl: 7 }],
+    ['thrower', 28, 28, { lvl: 5 }], ['thrower', 56, 34, { lvl: 6 }], ['thrower', 78, 25, { lvl: 7 }],
+    ['boar', 12, 19, { lvl: 4 }], ['boar', 48, 21, { lvl: 5 }], ['rabbit', 18, 14], ['rabbit', 70, 23],
+    ['herb', 26, 11], ['herb', 34, 31], ['herb', 50, 18], ['herb', 60, 34], ['herb', 72, 20], ['berries', 14, 24], ['berries', 64, 10],
+  ],
+});
+
+SCENES.marsh = wild({
+  name: 'marsh', w: 90, h: 44, water: 0.1,
+  glades: [[8, 20, 6], [20, 30, 7], [36, 14, 8], [48, 30, 7], [60, 22, 8], [74, 12, 7], [82, 30, 6]],
+  path: [[0, 20], [8, 20], [20, 29], [36, 15], [48, 29], [60, 22], [74, 13], [82, 29]],
+  spawns: [
+    ['gateway', 1, 20, { to: 'grove', at: [82, 22], label: 'назад в рощу' }],
+    ['campfire', 10, 23, { save: 'marsh' }],
+    ['spiker', 18, 32, { lvl: 8 }], ['spiker', 40, 12, { lvl: 9 }], ['spiker', 50, 32, { lvl: 9 }], ['spiker', 62, 25, { lvl: 10 }], ['spiker', 80, 32, { lvl: 10 }],
+    ['jumper', 34, 17, { lvl: 8 }], ['jumper', 58, 20, { lvl: 9 }], ['jumper', 76, 14, { lvl: 10 }],
+    ['thrower', 24, 28, { lvl: 8 }], ['thrower', 46, 27, { lvl: 9 }], ['thrower', 72, 10, { lvl: 11 }],
+    ['herb', 12, 18], ['herb', 22, 33], ['herb', 38, 12], ['herb', 46, 33], ['herb', 62, 19], ['herb', 76, 11], ['herb', 84, 31],
+  ],
+});
+
+// Хутор у тракта: поля, заборы, колодец и свои заботы
+SCENES.village = {
+  name: 'village', theme: 'slums', w: 58, h: 40, fill: '.', respawn: true,
+  build(P) {
+    const { set, rect, get, rng } = P;
+    rect(0, 0, 57, 0, 'X'); rect(0, 39, 57, 39, 'X'); rect(0, 0, 0, 39, 'X'); rect(57, 0, 57, 39, 'X');
+    const spawns = [];
+    for (const [x, y, w, h] of [[6, 6, 5, 3], [16, 4, 4, 3], [26, 6, 6, 4], [40, 5, 5, 3], [8, 16, 4, 3], [44, 16, 5, 3]]) {
+      const [dx, dy] = house(P, x, y, w, h, { locked: true, color: (x + y) % 4 });
+      spawns.push(['door', dx, dy, { locked: true }]);
+    }
+    // Поля за заборами
+    const field = (x0, y0, x1, y1) => {
+      rect(x0, y0, x1, y1, ',');
+      rect(x0 - 1, y0 - 1, x1 + 1, y0 - 1, 'f'); rect(x0 - 1, y1 + 1, x1 + 1, y1 + 1, 'f');
+      rect(x0 - 1, y0, x0 - 1, y1, 'f'); rect(x1 + 1, y0, x1 + 1, y1, 'f');
+      set(Math.floor((x0 + x1) / 2), y1 + 1, '.');   // калитка
+    };
+    field(4, 24, 18, 32); field(36, 24, 52, 33);
+    rect(22, 10, 34, 38, ':'); rect(2, 13, 55, 14, ':');
+    set(28, 16, '~');   // колодец
+    for (let i = 0; i < 60; i++) { const x = (rng() * 58) | 0, y = (rng() * 40) | 0; if (get(x, y) === '.' && rng() < 0.5) set(x, y, ','); }
+    spawns.push(
+      ['gateway', 28, 37, { to: 'road', at: [46, 5], label: 'назад на тракт' }],
+      ['npc', 26, 17, { who: 'villager', role: 'farmer', face: 'r' }],
+      ['npc', 31, 17, { who: 'kindwoman', role: 'herbwoman', face: 'l' }],
+      ['npc', 14, 12, { who: 'boy', role: 'villageBoy', face: 'r' }],
+      ['campfire', 24, 20, { save: 'village' }],
+      ['boar', 8, 27, { lvl: 2 }], ['boar', 14, 30, { lvl: 2 }], ['boar', 40, 27, { lvl: 2 }], ['boar', 48, 30, { lvl: 3 }], ['boar', 44, 25, { lvl: 3 }],
+      ['rabbit', 12, 26], ['rabbit', 46, 31], ['herb', 20, 35], ['herb', 54, 20], ['berries', 4, 18],
+      ['crate', 34, 12], ['barrel', 20, 9],
+      ['container', 34, 12, { name: 'ящик у амбара', hold: 0.9, loot: { coins: 3 }, watched: true }],
+    );
+    return spawns;
   },
 };

@@ -175,6 +175,9 @@ const Art = { spr: {}, tiles: {} };
     'dwppwwwwwppd', 'dwppwwwwwwwd', 'dddddddddddd', '..dd....dd..',
   ], { d: '#4a3220', w: '#6a5030', p: '#e0d8c0' });
   S.sack = spriteFrom(['..sss..', '.sssss.', 'ssssssd', 'ssssssd', 'sssssdd', '.sdddd.'], { s: '#b0a070', d: '#6a5a40' });
+  S.iconSword = spriteFrom(['......w', '.....wl', '....wl.', '...wl..', 'h.wl...', '.hh....', 'bhh....'], { w: '#e0e4e8', l: '#8a929a', h: '#8a6a3a', b: '#5a3a1a' });
+  S.iconArmor = spriteFrom(['.aa.aa.', 'aaaaaaa', 'aAaaaAa', '.aaaaa.', '.aaaaa.', '.aa.aa.'], { a: '#7a5a3a', A: '#b08a5a' });
+  S.iconKnives = spriteFrom(['w...w..', '.w...w.', '..w...w', '...h...', '....h..'], { w: '#d8dce0', h: '#6a4a2a' });
   S.iconCloud = spriteFrom(['.ggg..', 'gGgggg', 'gggggg', '.gg.g.'], { g: '#7ac04a', G: '#b8f070' });
 
   const heartRows = ['.rr.rr.', 'rRrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...'];
