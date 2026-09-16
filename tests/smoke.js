@@ -70,6 +70,8 @@
     pendant.used = true; Game.onContainer(pendant); skip();
     ok('погоня: двое громил', Story.step === 'chase1' && Game.npcs.filter(c => c.group === 'chase1').length === 2);
     Chapter0.endChase1(); skip();
+    const stalls = Game.props.filter(c => c instanceof Container && c.kind === 'stall' && !c.used);
+    ok('в сумерках товар с прилавков убран, а не висит без действия', stalls.length && stalls.every(c => c.packed && !c.interaction({ x: c.x, y: c.y + 10 })));
     ok('сумерки: 16 фонарщиков, торговцы и прохожие ушли', Story.step === 'sneak' && Game.npcs.filter(c => c.group === 'sneak').length === 16 && !Game.npcs.some(n => n instanceof Walker && !n.hidden));
     const hf = Game.tags.homeFront; p.x = hf.x; p.y = hf.y;
     run(15, () => Story.step === 'flee');
@@ -109,12 +111,17 @@
     Game.loadScene('forest'); skip();
     const blocked = Nav.find(tc(2, 20).x, tc(2, 20).y, tc(24, 30).x, tc(24, 30).y);
     ok('завал g1 перекрывает лес целиком', blocked && blocked.partial);
+    // Костёр разожгли раньше, чем поймали зайцев — обучение не должно застревать
+    const fire = Game.props.find(c => c instanceof Campfire); tp(7, 19); Game.useCampfire(fire); skip(); Game.dialog = null;
+    for (const r of Game.enemies.filter(e => e instanceof Rabbit).slice(0, 2)) r.takeHit(9, 'knife', 1, 0, Game.player);
+    ok('костёр до зайцев: сразу «пожарить и поесть»', Story.step === 'night3', Story.step);
     Chapter1.openGate('g1');
     const open = Nav.find(tc(2, 20).x, tc(2, 20).y, tc(24, 30).x, tc(24, 30).y);
     ok('после сна завал разобран', open && !open.partial);
 
     // Охотник и большой прыгун дерутся по-настоящему
     Object.assign(Game.flags, { step: 'toHunter', morning: true, 'open:g1': true, 'open:g2': true, 'open:g3': true });
+    Game.removed.add('forest:jumper:62,28');   // первый прыгун к этому моменту убит
     Game.loadScene('forest'); skip();
     const h = Game.tags.hunter, j = Game.tags.bigJumper;
     ok('до подхода героя оба спят', h.dormant && j.dormant);

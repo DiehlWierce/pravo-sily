@@ -180,7 +180,7 @@ class Container {
   get stealing() { return this.owners.length > 0; }
   update() { }
   interaction(p) {
-    if (this.used || dist(p.x, p.y, this.x, this.y) > 30 || this.cool > Game.time) return null;
+    if (this.used || this.packed || dist(p.x, p.y, this.x, this.y) > 30 || this.cool > Game.time) return null;
     if (!Events.allow('can:loot', this)) return null;
     return {
       key: this, x: this.x, y: this.y - 12, hold: this.hold,
@@ -193,7 +193,7 @@ class Container {
     };
   }
   draw(ctx, cam) {
-    if (this.used || !this.icon) return;
+    if (this.used || this.packed || !this.icon) return;
     const img = Art.spr[this.icon];
     drawSpr(ctx, img, this.x - img.width / 2 - cam.x, this.y - img.height - 2 + (this.icon === 'pendant' ? Math.sin(Game.time * 4) : 0) - cam.y);
     if (this.icon === 'pendant' && Math.floor(Game.time * 3) % 3 === 0) { ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(this.x + 2 - cam.x), Math.round(this.y - 9 - cam.y), 1, 1); }

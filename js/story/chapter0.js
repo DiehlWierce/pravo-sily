@@ -38,7 +38,7 @@ const Chapter0 = {
       return false;
     });
     Events.on('can:talk', () => !this.busy());
-    Events.on('can:loot', () => !this.busy());
+    Events.on('can:loot', c => !this.busy() || this.step === 'chase1' || !c.stealing);
     Events.on('can:enter', () => { if (this.busy()) { Game.hint('Не сейчас!', 1.2); return false; } });
     Events.on('container', c => { if (c.loot.pendant) this.pendantTheft(); else this.objective(); });
     for (const ev of ['junk', 'shop:bought', 'coins:changed']) Events.on(ev, () => this.objective());
@@ -178,6 +178,8 @@ const Chapter0 = {
   // В сумерках торговцы и прохожие расходятся по домам
   hideLocals() {
     for (const n of Game.npcs) if ((n.role && n.role !== 'drunk' && !(n instanceof Chaser)) || n instanceof Walker) n.hidden = true;
+    // Торговцы унесли товар: на прилавках больше ничего не лежит
+    for (const c of Game.props) if (c instanceof Container && c.kind === 'stall') c.packed = true;
   },
   spawnSearchers() {
     const c = CONFIG.chase.lantern;

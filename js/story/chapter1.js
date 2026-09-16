@@ -103,12 +103,13 @@ const Chapter1 = {
     return true;
   },
   onCampfire(fire, justLit) {
-    if (justLit && this.step === 'night2') {
-      this.step = 'night3';
-      Game.objective = 'Пожарить мясо на костре и поесть';
-      Game.hint('Space у костра — пожарить. Потом съесть: через вещи (Enter) или быструю кнопку E.', 5);
-    }
+    if (this.step === 'night2') this.cookStep();   // зажёг сейчас или раньше — неважно
     return false;
+  },
+  cookStep() {
+    this.step = 'night3';
+    Game.objective = 'Пожарить мясо на костре и поесть';
+    Game.hint('Space у костра — пожарить. Потом съесть: через вещи (Enter) или быструю кнопку E.', 5);
   },
   onAte() {
     if (this.step === 'night3') { this.step = 'night4'; Game.objective = 'Поспать у костра (Отдохнуть)'; Game.hint('Теперь можно и поспать. Space у костра — Отдохнуть.', 4); }
@@ -159,7 +160,11 @@ const Chapter1 = {
     if (e instanceof Rabbit) {
       F.rabbits = (F.rabbits || 0) + 1;
       if (this.step === 'night1') {
-        if (F.rabbits >= 2) { this.step = 'night2'; Game.objective = 'Разжечь костёр на опушке'; Game.hint('Мясо есть. Теперь костёр: Space у кострища.', 4); }
+        if (F.rabbits >= 2) {
+          // Костёр могли разжечь заранее — тогда сразу жарить
+          if (Game.props.some(c => c instanceof Campfire && c.lit)) this.cookStep();
+          else { this.step = 'night2'; Game.objective = 'Разжечь костёр на опушке'; Game.hint('Мясо есть. Теперь костёр: Space у кострища.', 4); }
+        }
         else Game.objective = `Поймать двух зайцев: ${F.rabbits}/2`;
       } else if (this.step === 'hunt') this.checkHunt();
     }
