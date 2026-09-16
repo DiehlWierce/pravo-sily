@@ -5,6 +5,27 @@ const tc = (tx, ty) => ({ x: tx * TS + 8, y: ty * TS + 10 });
 const DUSK = 'rgba(18,22,58,0.5)';
 const BUSY = ['chase1', 'sneak', 'ruin', 'flee'];
 
+// Фонарщики торговца: ищут героя по всему городу в сумерках, а в финальной погоне сбегаются на крик.
+// route — патруль по точкам, look — стоит и водит фонарём из стороны в сторону (за спину не смотрит)
+const SEARCHERS = [
+  { at: [20, 42], route: [[20, 42], [40, 42]] },                 // низ города
+  { at: [30, 37], angle: -Math.PI / 2, look: true },
+  { at: [10, 30], route: [[10, 30], [10, 36]] },
+  { at: [46, 34], angle: Math.PI / 2, look: true },
+  { at: [15, 39], route: [[15, 39], [22, 39]] },
+  { at: [13, 33], angle: Math.PI, look: true },                  // у самого дома
+  { at: [43, 41], route: [[43, 41], [43, 36]] },                 // поперёк нижнего проулка
+  { at: [24, 29], route: [[24, 29], [36, 29]] },                 // середина
+  { at: [40, 30], route: [[40, 30], [52, 30]] },
+  { at: [6, 25], route: [[6, 25], [6, 32]] },
+  { at: [35, 25], angle: Math.PI / 2, look: true },              // мостки через канаву
+  { at: [20, 20], route: [[20, 20], [30, 20]] },                 // за канавой и к рынку
+  { at: [40, 19], route: [[40, 19], [52, 19]] },
+  { at: [25, 11], route: [[25, 11], [36, 11]] },
+  { at: [56, 12], angle: Math.PI / 2, look: true },              // у заколоченных ворот
+  { at: [50, 26], route: [[50, 26], [57, 26], [57, 22]] },
+];
+
 // Характеры жителей: кто прогонит, кто расскажет, кто подаст, кто купит хлам
 const PERSONAS = {
   beggar: {
@@ -267,45 +288,51 @@ const Story = {
   },
   startChase1() {
     this.step = 'chase1'; Sfx.alarm(); FX.shake = 4;
+    this.spawnChase1();
+    Game.waypoint = null; Game.flags.lostThem = false;
+    Game.objective = 'Оторваться от громил: скрыться из виду';
+    Game.save();
+    Game.hint('Пока они тебя видят, прятаться бесполезно. Петляй за домами и заборами. Shift — рывок.', 5.5);
+  },
+  // Громилы с рынка бросаются за вором
+  spawnChase1() {
     for (const role of ['guardA', 'guardB']) {
       const g = Game.roles[role]; if (!g) continue;
       g.hidden = true;
       const c = new Chaser(g.x, g.y, { who: 'thug', role: role + 'C', speed: 66, range: 96, half: 0.8, group: 'chase1' });
       Game.npcs.push(c); c.startChase(); c.alertT = 0.6;
     }
-    Game.waypoint = null; Game.flags.lostThem = false;
-    Game.save();
-    Game.objective = 'Оторваться от громил: скрыться из виду';
-    Game.hint('Пока они тебя видят, прятаться бесполезно. Петляй за домами и заборами. Shift — рывок.', 5.5);
+  },
+  // В сумерках торговцы и прохожие расходятся по домам
+  hideLocals() { for (const n of Game.npcs) if (n.role && n.role !== 'drunk' && !(n instanceof Chaser)) n.hidden = true; },
+  spawnSearchers() {
+    for (const w of SEARCHERS) Game.addChaser(w.at[0], w.at[1], {
+      who: 'thug', group: 'sneak', lantern: true, speed: 58, patrolSpeed: 24, range: 72, half: 0.7,
+      angle: w.angle || 0, look: w.look, route: w.route && w.route.map(([x, y]) => tc(x, y)),
+    });
   },
   endChase1() {
     this.step = 'sneak'; Game.waypoint = null;
     for (const c of Game.npcs) if (c.group === 'chase1') { c.hidden = true; c.active = false; }
-    for (const n of Game.npcs) if (n.role && !['drunk'].includes(n.role)) n.hidden = true;
+    this.hideLocals();
     Game.say([
       { who: '', text: 'Я забился в щель между сараями и сидел там, пока небо не стало серым.' },
       { who: 'Я', text: 'Подвеска... тёплая. Будто живая. Сколько же она стоит?' },
       { who: '', text: 'На улицах загремели голоса. Люди торговца ходили с фонарями и искали меня.' },
     ], () => {
       World.tint = DUSK; Game.flags.dusk = true;
-      const watchers = [
-        { at: [20, 42], route: [[20, 42], [40, 42]] },
-        { at: [30, 37], angle: -Math.PI / 2, look: true },
-        { at: [10, 30], route: [[10, 30], [10, 36]] },
-        { at: [45, 33], route: [[45, 33], [53, 39]] },
-      ];
-      for (const w of watchers) Game.addChaser(w.at[0], w.at[1], {
-        who: 'thug', group: 'sneak', lantern: true, speed: 58, patrolSpeed: 24, range: 72, half: 0.7,
-        angle: w.angle || 0, look: w.look, route: w.route && w.route.map(([x, y]) => tc(x, y)),
-      });
+      this.spawnSearchers();
       Game.flags.sneakCp = { x: Game.tags.hideout.x, y: Game.tags.hideout.y };
       Game.waypoint = { x: Game.tags.homeFront.x, y: Game.tags.homeFront.y, label: 'дом' };
       Game.objective = 'Вернуться домой незаметно'; Game.save();
-      Game.hint('Не попадайся в свет фонарей. Конус показывает, куда смотрят.', 4.5);
+      Game.hint('Фонарщики по всему городу. Не попадайся в свет: конус показывает, куда смотрят.', 4.5);
     });
   },
 
-  onSpotted() { if (this.step === 'sneak') Game.hint('Заметили!', 1.5); },
+  onSpotted(c) {
+    if (this.step === 'sneak') Game.hint('Заметили!', 1.5);
+    if (this.step === 'flee' && c.group === 'sneak') Game.hint('Фонарщик: «Вон он! Сюда, сюда!»', 1.5);
+  },
   // Пока громилы видят героя, укрытие не поможет; оторвался — появляется стрелка к щели
   chaseUpdate(p) {
     const cs = Game.npcs.filter(c => c.group === 'chase1' && c.active && !c.hidden);
@@ -328,11 +355,15 @@ const Story = {
   onCaught(c) {
     const p = this.p, n = norm(p.x - c.x, p.y - c.y);
     if (this.step === 'chase1' || this.step === 'flee') {
+      if (p.invul > 0) return;   // только что вырвался — не добивают по цепочке
       const dmg = this.step === 'flee' ? 2 : 1;
       if (p.hp - dmg < 2) p.hp = 2 + dmg;
       p.invul = 0; p.hurt(dmg, n.x, n.y); p.kvx = n.x * 240; p.kvy = n.y * 240; p.invul = 1.3;
       c.state = 'alert'; c.alertT = 1.1;
-      Game.hint(this.step === 'flee' ? 'Сборщик: «Далеко не уйдёшь!»' : 'Громила: «Попался!» — удар под дых. Я вывернулся и рванул дальше.', 2.5);
+      Game.hint(c.who === 'collector' ? 'Сборщик: «Далеко не уйдёшь!»'
+        : c.group === 'sneak' ? 'Фонарщик: «Держи его!» — я вывернулся из рук.'
+        : this.step === 'flee' ? 'Громила: «Режь его!» — крюк свистнул у самого уха.'
+        : 'Громила: «Попался!» — удар под дых. Я вывернулся и рванул дальше.', 2.5);
       return;
     }
     if (this.step === 'sneak') {
@@ -345,7 +376,7 @@ const Story = {
 
   ruinScene() {
     this.step = 'ruin'; Game.flags.ruined = true; Game.waypoint = null;
-    for (const c of Game.npcs) if (c.group === 'sneak') { c.active = false; c.hidden = true; }
+    for (const c of Game.npcs) if (c.group === 'sneak') c.active = false;
     this.applyRuin();
     const lines = [
       { who: '', text: 'Дверь сорвана с петель. Стена проломлена насквозь.' },
@@ -359,7 +390,7 @@ const Story = {
       Game.after(0.1, () => Game.showBanner('НОЖ', 'отцовский · J', 2.5, '#e8e0d0'));
     }
     Game.say(lines, () => {
-      const col = Game.addChaser(4, 35, { who: 'collector', group: 'flee', relentless: true, speed: 74, showCone: false, active: false });
+      const col = this.collectorFromRuin();
       col.goalSpeed = 28;
       col.goal = {
         ...tc(4, 37), done: () => Game.say([
@@ -378,19 +409,57 @@ const Story = {
     for (let x = 3; x <= 6; x++) World.set(x, 35, 'W');
     World.set(4, 35, 'h');
   },
+  spawnCollector(tx, ty) { return Game.addChaser(tx, ty, { who: 'collector', group: 'flee', relentless: true, speed: 74, showCone: false, active: false }); },
+  // Сборщик выходит из пролома в стене — ставим точно в пролом, мимо поиска свободного места
+  collectorFromRuin() {
+    const col = new Chaser(4 * TS + 8, 35 * TS + 10, { who: 'collector', group: 'flee', relentless: true, speed: 74, showCone: false, active: false });
+    Game.npcs.push(col); return col;
+  },
+  // Банда из дома: Сборщик и двое с крюками. Бегут наравне с героем и не отстают
+  unleashGang(delay) {
+    const col = Game.npcs.find(n => n.who === 'collector');
+    col.home = tc(4, 37); col.active = true; col.startChase(); col.alertT = delay;
+    for (const [x, y] of [[1, 41], [16, 37]]) {
+      const t = Game.addChaser(x, y, { who: 'thug', group: 'flee', relentless: true, speed: 72, showCone: false });
+      t.startChase(); t.alertT = delay + 0.3;
+    }
+  },
+  // Фонарщики слышат крик и сбегаются со всего города: сначала идут на шум, увидев — гонятся
+  rouseSearchers(delay) {
+    const p = this.p;
+    for (const c of Game.npcs) if (c.group === 'sneak') {
+      Object.assign(c, { hidden: false, active: true, hunt: true, route: null, speed: 64, huntSpeed: 42, range: 88, half: 0.8, nav: null, huntAt: null });
+      c.state = 'hunt'; c.huntDelay = delay + dist(c.x, c.y, p.x, p.y) / 160;
+    }
+  },
+  openCityGate() { for (let y = 6; y <= 8; y++) World.set(59, y, '.'); },
   startFlee() {
     this.step = 'flee'; Game.focus(null);
-    for (let y = 6; y <= 8; y++) World.set(59, y, '.');
-    const col = Game.npcs.find(n => n.who === 'collector');
-    col.home = tc(4, 37); col.active = true; col.startChase(); col.alertT = 1.2;
-    for (const [x, y] of [[1, 40], [14, 38]]) {
-      const t = Game.addChaser(x, y, { who: 'thug', group: 'flee', relentless: true, speed: 72, showCone: false });
-      t.startChase(); t.alertT = 1.5;
-    }
+    this.openCityGate();
+    this.unleashGang(1.2);
+    this.rouseSearchers(0.8);
     Game.setCheckpoint(tc(4, 37).x, tc(4, 37).y);
     Game.waypoint = { x: Game.tags.gate.x, y: Game.tags.gate.y, label: 'ворота' };
     Game.objective = 'Бежать из города — к восточным воротам'; Game.save();
-    Game.hint('Бегом! Стрелка ведёт к воротам. Shift — рывок.', 4);
+    Game.hint('Бегом! На крик сбегаются фонарщики со всего квартала. Стрелка — к воротам, Shift — рывок.', 5);
+  },
+  // Загрузка посреди погони: расставить всех заново
+  restoreSlums() {
+    const step = this.step;
+    if (step === 'chase1') this.spawnChase1();
+    if (step === 'sneak') {
+      this.hideLocals(); this.spawnSearchers();
+      const h = Game.tags.homeFront; Game.waypoint = { x: h.x, y: h.y, label: 'дом' };
+    }
+    if (step === 'ruin' || step === 'flee') {
+      this.step = 'flee';
+      this.hideLocals(); this.spawnSearchers(); this.spawnCollector(9, 37);
+      this.openCityGate();
+      this.unleashGang(2);
+      this.rouseSearchers(1.5);
+      Game.waypoint = { x: Game.tags.gate.x, y: Game.tags.gate.y, label: 'ворота' };
+      Game.objective = 'Бежать из города — к восточным воротам';
+    }
   },
 
   // =====================================================================
@@ -438,7 +507,7 @@ const Story = {
     if (name === 'slums') {
       if (Game.flags.ruined) this.applyRuin();
       if (Game.flags.dusk) World.tint = DUSK;
-      if (this.step === 'flee') for (let y = 6; y <= 8; y++) World.set(59, y, '.');
+      this.restoreSlums();
     }
     if (name === 'forest') {
       this.applyGates();
@@ -693,6 +762,7 @@ const Story = {
     return false;
   },
   onLoad() {
+    if (World.name === 'slums' && this.step === 'flee') Game.objective = 'Бежать из города — к восточным воротам';
     if (Game.flags.chapterEnd) Game.objective = 'Глава 1 пройдена. Хижина — твоя. Дальше будет Глава 2.';
     if (World.name === 'forest') {
       const h = Game.tags.hunter, j = Game.tags.bigJumper;

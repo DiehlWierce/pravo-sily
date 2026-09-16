@@ -56,7 +56,7 @@ workflow будут падать на шаге деплоя — это ожид�
 
 ```
 index.html      точка входа
-js/             код игры (core, art, world, scenes, entities, npc, ui, story, game)
+js/             код игры (core, art, world, nav, scenes, entities, npc, ui, quests, chapter2, story, game)
 docs/           концепция, сценарии, план развития
 archive/        первый прототип (история)
 ```

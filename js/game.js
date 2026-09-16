@@ -118,7 +118,10 @@ const Game = {
     if (o.role) this.roles[o.role] = e;
     return e;
   },
-  addChaser(tx, ty, o) { const c = new Chaser(tx * TS + 8, ty * TS + 10, o); this.npcs.push(c); if (o.role) this.roles[o.role] = c; return c; },
+  addChaser(tx, ty, o) {
+    const f = this.freeSpot(tx * TS + 8, ty * TS + 10);   // не ставить в стену дома
+    const c = new Chaser(f.x, f.y, o); this.npcs.push(c); if (o.role) this.roles[o.role] = c; return c;
+  },
   addSpot(x, y, o) { const s = new Spot(x, y, o); this.props.push(s); return s; },
   exitInterior() {
     if (!Story.canExit()) return;

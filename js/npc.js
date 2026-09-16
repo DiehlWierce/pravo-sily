@@ -25,7 +25,9 @@ function stepTo(e, gx, gy, speed, dt) {
   const d = dist(e.x, e.y, gx, gy);
   if (d < 3) return true;
   const n = norm(gx - e.x, gy - e.y), s = Math.min(speed * dt, d);
-  if (moveBody(e, n.x * s, n.y * s)) { if (moveBody(e, -n.y * s, n.x * s)) moveBody(e, n.y * s, -n.x * s); }
+  // Упёрся совсем — пробуем боком. Если хоть по одной оси продвинулся, не мешаем, иначе тело дёргается туда-обратно
+  const shift = (dx, dy) => { const ox = e.x, oy = e.y; moveBody(e, dx, dy); return Math.abs(e.x - ox) + Math.abs(e.y - oy); };
+  if (shift(n.x * s, n.y * s) < s * 0.25 && shift(-n.y * s, n.x * s) < s * 0.25) shift(n.y * s, -n.x * s);
   e.moving = true; if (Math.abs(n.x) > 0.2) e.lr = n.x > 0 ? 'r' : 'l';
   e.angle = Math.atan2(n.y, n.x);
   return false;
@@ -38,7 +40,7 @@ class NPC {
   }
   update(dt) {
     this.moving = false;
-    if (this.goal) { if (stepTo(this, this.goal.x, this.goal.y, this.goalSpeed || 40, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); } return; }
+    if (this.goal) { if (Nav.go(this, this.goal.x, this.goal.y, this.goalSpeed || 40, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); } return; }
     const p = Game.player;
     if (!this.lying && dist(p.x, p.y, this.x, this.y) < 40) this.lr = p.x > this.x ? 'r' : 'l';
   }
@@ -86,11 +88,13 @@ class Watcher extends NPC {
 }
 
 // ---------- Преследователь / патрульный. Заговоришь с ним — сразу заметит ----------
+// Ходит по поиску пути (Nav): обходит дома, заборы и бочки. Безжалостный (relentless) знает, где герой, и не отстаёт.
+// Состояние hunt: услышал шум — идёт на звук, пока не увидит героя.
 class Chaser extends NPC {
   constructor(x, y, o) {
-    super(x, y, { speed: 64, patrolSpeed: 26, range: 84, half: 0.75, route: null, relentless: false, lantern: false, active: true, ...o });
+    super(x, y, { speed: 64, patrolSpeed: 26, huntSpeed: 42, range: 84, half: 0.75, route: null, relentless: false, lantern: false, active: true, ...o });
     this.state = this.route ? 'patrol' : 'idle'; this.ri = 0; this.angle = o.angle || 0; this.lostT = 0; this.alertT = 0;
-    this.home = { x, y }; this.trailIdx = 0; this.searchT = 0;
+    this.home = { x, y }; this.trailIdx = 0; this.searchT = 0; this.baseAngle = this.angle;
   }
   interaction(p) {
     if (this.hidden || !this.active || this.state === 'chase' || this.state === 'alert' || dist(p.x, p.y, this.x, this.y) > 30) return null;
@@ -109,49 +113,69 @@ class Chaser extends NPC {
   }
   update(dt) {
     this.moving = false;
-    if (this.goal) { if (stepTo(this, this.goal.x, this.goal.y, this.goalSpeed || this.speed, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); } return; }
+    if (this.goal) { if (Nav.go(this, this.goal.x, this.goal.y, this.goalSpeed || this.speed, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); } return; }
     if (!this.active || this.hidden) return;
+    // Толпа не слипается в одну точку: соседи мягко расталкивают друг друга
+    for (const o of Game.npcs) {
+      if (o === this || !(o instanceof Chaser) || !o.active || o.hidden) continue;
+      const d = dist(this.x, this.y, o.x, o.y);
+      if (d < 11 && d > 0.01) moveBody(this, (this.x - o.x) / d * 26 * dt, (this.y - o.y) / d * 26 * dt);
+    }
     const p = Game.player, seen = this.seesPlayer();
     switch (this.state) {
       case 'idle':
-        if (this.look) this.angle += Math.sin(Game.time * 0.7 + this.x) * dt * 0.8;
+        if (this.look) this.angle = this.baseAngle + Math.sin(Game.time * 0.6 + this.x) * 0.9;   // водит фонарём, но за спину не смотрит
         if (seen) this.startChase();
         break;
       case 'patrol': {
         const pt = this.route[this.ri];
-        if (stepTo(this, pt.x, pt.y, this.patrolSpeed, dt)) this.ri = (this.ri + 1) % this.route.length;
+        if (Nav.go(this, pt.x, pt.y, this.patrolSpeed, dt)) this.ri = (this.ri + 1) % this.route.length;
         if (seen) this.startChase();
         break;
       }
+      case 'hunt':
+        if (this.huntDelay > 0) {   // услышал крик: оборачивается на звук и только потом идёт
+          this.huntDelay -= dt; this.angle = Math.atan2(p.y - this.y, p.x - this.x); this.lr = p.x > this.x ? 'r' : 'l';
+          if (seen) this.startChase();
+          break;
+        }
+        this.huntT -= dt;
+        if (!this.huntAt || this.huntT <= 0) { this.huntAt = { x: p.x + rrange(-48, 48), y: p.y + rrange(-40, 40) }; this.huntT = rrange(1.8, 3); }
+        if (Nav.go(this, this.huntAt.x, this.huntAt.y, this.huntSpeed, dt)) this.huntT = Math.min(this.huntT, 0.4);
+        if (seen) this.startChase();
+        break;
       case 'alert':
         this.alertT -= dt; this.angle = Math.atan2(p.y - this.y, p.x - this.x); this.lr = p.x > this.x ? 'r' : 'l';
         if (this.alertT <= 0) { this.state = 'chase'; this.lostT = 0; Story.onSpotted(this); }
         break;
       case 'chase': {
         const direct = World.sight(this.x, this.y - 4, p.x, p.y - 4);
-        if (direct) { this.lostT = 0; this.trailIdx = Math.max(0, Game.trail.length - 1); stepTo(this, p.x, p.y, this.speed, dt); this.last = { x: p.x, y: p.y }; }
-        else {
+        if (direct) { this.lostT = 0; this.trailIdx = Math.max(0, Game.trail.length - 1); Nav.go(this, p.x, p.y, this.speed, dt); this.last = { x: p.x, y: p.y }; }
+        else if (this.relentless) { this.lostT += dt; Nav.go(this, p.x, p.y, this.speed, dt); }
+        else {   // идёт по следу: срезает к самой дальней точке следа, до которой есть прямой проход
           this.lostT += dt;
-          const tp = Game.trail[Math.min(this.trailIdx, Game.trail.length - 1)];
-          if (tp && stepTo(this, tp.x, tp.y, this.speed, dt)) this.trailIdx++;
-          if (!this.relentless && this.lostT > 2.6) { this.state = 'search'; this.searchT = 2.6; }
+          const tr = Game.trail, end = tr.length - 1;
+          for (let k = 0; k < 6 && this.trailIdx < end && Nav.clear(this, tr[this.trailIdx + 1].x, tr[this.trailIdx + 1].y); k++) this.trailIdx++;
+          const tp = tr[Math.min(this.trailIdx, end)];
+          if (tp && Nav.go(this, tp.x, tp.y, this.speed, dt)) this.trailIdx++;
+          if (this.lostT > 2.6) { this.state = 'search'; this.searchT = 2.6; }
         }
         if (p.alive && dist(p.x, p.y, this.x, this.y) < 10 && p.dashT <= 0) Story.onCaught(this);
         break;
       }
       case 'search':
         this.searchT -= dt; this.angle += dt * 2.4; this.lr = Math.cos(this.angle) > 0 ? 'r' : 'l';
-        if (this.last && dist(this.x, this.y, this.last.x, this.last.y) > 4) stepTo(this, this.last.x, this.last.y, this.patrolSpeed * 1.5, dt);
+        if (this.last && dist(this.x, this.y, this.last.x, this.last.y) > 4) Nav.go(this, this.last.x, this.last.y, this.patrolSpeed * 1.5, dt);
         if (seen) this.startChase();
-        else if (this.searchT <= 0) { this.state = 'return'; Story.onLost(this); }
+        else if (this.searchT <= 0) { this.state = this.hunt ? 'hunt' : 'return'; this.huntT = 0; Story.onLost(this); }
         break;
       case 'return':
-        if (stepTo(this, this.home.x, this.home.y, this.patrolSpeed, dt)) { this.state = this.route ? 'patrol' : 'idle'; this.ri = 0; }
+        if (Nav.go(this, this.home.x, this.home.y, this.patrolSpeed, dt)) { this.state = this.route ? 'patrol' : 'idle'; this.ri = 0; }
         if (seen) this.startChase();
         break;
     }
   }
-  reset() { this.x = this.home.x; this.y = this.home.y; this.state = this.route ? 'patrol' : 'idle'; this.ri = 0; this.lostT = 0; this.goal = null; }
+  reset() { this.x = this.home.x; this.y = this.home.y; this.state = this.route ? 'patrol' : 'idle'; this.ri = 0; this.lostT = 0; this.goal = null; this.nav = null; }
   draw(ctx, cam) {
     if (this.hidden) return;
     if (this.lantern) {
@@ -164,7 +188,7 @@ class Chaser extends NPC {
     drawHuman(ctx, cam, this);
     if (this.lantern) drawSpr(ctx, Art.spr.lantern, this.x - cam.x + (this.lr === 'r' ? 4 : -7), this.y - cam.y - 7);
     if (this.state === 'alert' || this.state === 'chase') drawIcon(ctx, cam, this, '!', '#ff5040');
-    else if (this.state === 'search') drawIcon(ctx, cam, this, '?', '#ffe080');
+    else if (this.state === 'search' || (this.state === 'hunt' && this.active)) drawIcon(ctx, cam, this, '?', '#ffe080');
   }
 }
 
@@ -204,7 +228,7 @@ class Hunter extends Enemy {
     this.flashT = Math.max(0, this.flashT - dt);
     if (this.kvx || this.kvy) { moveBody(this, this.kvx * dt, this.kvy * dt); this.kvx *= Math.pow(0.002, dt); this.kvy *= Math.pow(0.002, dt); if (Math.abs(this.kvx) + Math.abs(this.kvy) < 5) this.kvx = this.kvy = 0; }
     this.moving = false;
-    if (this.goal) { if (stepTo(this, this.goal.x, this.goal.y, 45, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); } return; }
+    if (this.goal) { if (Nav.go(this, this.goal.x, this.goal.y, 45, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); } return; }
     if (this.dead) {
       if (this.looted) { this.fade -= dt; if (this.fade <= 0) this.remove = true; }
       return;

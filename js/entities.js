@@ -336,7 +336,7 @@ class Enemy {
   approach(dt, speed, range = 200) {
     const p = this.tgt;
     if (!p.alive || dist(p.x, p.y, this.x, this.y) > range) return false;
-    stepTo(this, p.x, p.y, speed, dt);   // stepTo умеет скользить вдоль деревьев, а не упираться в них
+    Nav.go(this, p.x, p.y, speed, dt);   // обходит деревья, валуны и заборы по поиску пути
     return true;
   }
   // Шкура и кость держат нож, пока герой слаб: пробить можно ударом не слабее остатка здоровья зверя
@@ -408,7 +408,7 @@ class Enemy {
   }
   leash(dt) {
     if (dist(this.x, this.y, this.home.x, this.home.y) > 200 && !this.sees(this.sight)) {
-      const n = norm(this.home.x - this.x, this.home.y - this.y); moveBody(this, n.x * 40 * dt, n.y * 40 * dt); return true;
+      Nav.go(this, this.home.x, this.home.y, 40, dt); return true;
     }
     return false;
   }

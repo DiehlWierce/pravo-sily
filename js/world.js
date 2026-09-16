@@ -10,10 +10,10 @@
 //  Интерьер: B/V кровать, t стол, k печь, H полка, C сундук, r ковёр, E выход
 
 const World = {
-  name: '', theme: 'forest', w: 0, h: 0, grid: [], meta: [], tint: null,
+  name: '', theme: 'forest', w: 0, h: 0, grid: [], meta: [], tint: null, rev: 0,
 
   load(def) {
-    this.name = def.name; this.theme = def.theme; this.w = def.w; this.h = def.h; this.tint = def.tint || null;
+    this.rev++; this.name = def.name; this.theme = def.theme; this.w = def.w; this.h = def.h; this.tint = def.tint || null;
     this.grid = []; this.meta = new Array(def.w * def.h).fill(0);
     for (let y = 0; y < def.h; y++) this.grid.push(new Array(def.w).fill(def.fill || '.'));
     this.spawns = def.build(this.painter());
@@ -39,7 +39,7 @@ const World = {
   get pxH() { return this.h * TS; },
   at(tx, ty) { return (tx < 0 || ty < 0 || tx >= this.w || ty >= this.h) ? 'T' : this.grid[ty][tx]; },
   atPx(x, y) { return this.at(Math.floor(x / TS), Math.floor(y / TS)); },
-  set(tx, ty, c) { if (tx >= 0 && ty >= 0 && tx < this.w && ty < this.h) this.grid[ty][tx] = c; },
+  set(tx, ty, c) { if (tx >= 0 && ty >= 0 && tx < this.w && ty < this.h && this.grid[ty][tx] !== c) { this.grid[ty][tx] = c; this.rev++; } },
 
   solidWalk(c) { return 'T#D~fSMXOLYZRWBVtkHCcd'.includes(c); },
   solidFly(c) { return 'T#DSMXOLYZRWBVtkHCcd'.includes(c); },
