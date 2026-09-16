@@ -74,6 +74,15 @@ const Game = {
         if (kind === 'mark') { e = { x, y, sid: id }; if (o.tag) this.tags[o.tag] = e; return e; }
         if (!e) return;
         break;
+      case 'gateway':
+        e = this.addSpot(x, y, {
+          r: 22, to: o.to, label: 'Space: ' + (o.label || 'идти дальше'),
+          fn: () => {
+            if (!Story.canEnter(o.to)) return;
+            this.enterScene(o.to, o.at ? { x: o.at[0] * TS + 8, y: o.at[1] * TS + 10 } : null);
+          },
+        });
+        break;
       case 'door':
         e = this.addSpot(x, (ty + 1) * TS + 4, {
           r: 16, to: o.to, locked: o.locked,

@@ -114,14 +114,20 @@ const Story = {
 
   // ---------- Разговоры ----------
   canTalk(n) { return !n.hidden && !this.busy(); },
-  canEnter() { if (this.busy()) { Game.hint('Не сейчас!', 1.2); return false; } return true; },
+  canEnter(to) {
+    if (this.busy()) { Game.hint('Не сейчас!', 1.2); return false; }
+    if (to === 'road' && !Game.flags.chapterEnd) { Game.hint('Сначала надо добраться до хижины и перевести дух.', 3); return false; }
+    if (to === 'city' && !Game.flags.inCity) { Game.hint('Стража не пускает. Сначала договорись у ворот.', 3); return false; }
+    return true;
+  },
   canExit() { return true; },
   canLoot() { return !this.busy(); },
   showCone(w) { return Game.props.some(c => c instanceof Container && !c.used && c.owners && c.owners.includes(w.role)); },
   onTalkEnemy() { Game.hint('Он узнал меня!', 2); },
 
   talk(n) {
-    const P = PERSONAS[n.role] || { name: 'Житель', rude: true, greet: 'Чего тебе?' };
+    if (C2.talk(n)) return;
+    const P = PERSONAS[n.role] || C2_PERSONAS[n.role] || { name: 'Житель', rude: true, greet: 'Чего тебе?' };
     const v = this.p.inv;
     if (n.role === 'mother') return this.talkMother();
     if (n.role === 'father') return this.talkFather();
@@ -337,11 +343,18 @@ const Story = {
     this.step = 'ruin'; Game.flags.ruined = true; Game.waypoint = null;
     for (const c of Game.npcs) if (c.group === 'sneak') { c.active = false; c.hidden = true; }
     this.applyRuin();
-    Game.say([
+    const lines = [
       { who: '', text: 'Дверь сорвана с петель. Стена проломлена насквозь.' },
       { who: 'Я', text: 'Мама?.. Отец?..' },
       { who: '', text: 'Внутри всё перевёрнуто. Пусто. Только тёмные пятна на полу.' },
-    ], () => {
+    ];
+    if (!this.p.hasKnife) {
+      this.p.hasKnife = true;
+      lines.push({ who: '', text: 'Под перевёрнутой лежанкой блеснуло железо. Отцовский нож в потёртых ножнах.' });
+      lines.push({ who: 'Я', text: 'Он его прятал. Всю жизнь прятал — а достать не успел.' });
+      Game.after(0.1, () => Game.showBanner('НОЖ', 'отцовский · J', 2.5, '#e8e0d0'));
+    }
+    Game.say(lines, () => {
       const col = Game.addChaser(4, 35, { who: 'collector', group: 'flee', relentless: true, speed: 74, showCone: false, active: false });
       col.goalSpeed = 28;
       col.goal = {
@@ -411,6 +424,12 @@ const Story = {
   },
 
   onSceneLoad(name) {
+    C2.onSceneLoad(name);
+    if (name === 'guild') {
+      const b = Game.tags.board;
+      if (b) Game.addSpot(b.x, b.y + 12, { r: 20, label: 'Space: доска заказов', fn: () => C2.board() });
+    }
+    if (name === 'road' && !Game.flags.chapter2Started) { Game.flags.chapter2Started = true; C2.start(); }
     if (name === 'slums') {
       if (Game.flags.ruined) this.applyRuin();
       if (Game.flags.dusk) World.tint = DUSK;
@@ -442,7 +461,7 @@ const Story = {
         { who: 'Я', text: 'Я вернусь в город. Но уже не крысёнышем.' },
       ], () => {
         Game.showBanner('КОНЕЦ ГЛАВЫ 1', 'дальше — Глава 2: дорога в город', 4, '#bff8ff');
-        Game.objective = 'Глава 1 пройдена. Осмотрись в хижине — выйти в меню можно из вещей (Q).';
+        Game.objective = 'Глава 1 пройдена. Осмотрись в хижине, а потом — на восток, к тракту.';
         Game.save();
       }));
     }
@@ -508,6 +527,7 @@ const Story = {
 
   // ---------- Добыча ----------
   onKill(e) {
+    C2.onKill(e);
     if (e instanceof Rabbit || e instanceof Boar) Game.once('firstAnimal', () => Game.hint('Держи Space у туши — разделать.', 2.5));
     if (e instanceof Rabbit) {
       Game.flags.rabbits = (Game.flags.rabbits || 0) + 1;
@@ -681,6 +701,7 @@ const Story = {
 
   update(dt) {
     const p = this.p;
+    if (Game.flags.chapter === 2) C2.update();
     if (World.name === 'slums') {
       if (this.step === 'chase1') this.chaseUpdate(p);
       if (this.step === 'sneak' && dist(p.x, p.y, Game.tags.homeFront.x, Game.tags.homeFront.y) < 22) this.ruinScene();

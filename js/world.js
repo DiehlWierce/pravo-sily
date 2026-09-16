@@ -41,9 +41,9 @@ const World = {
   atPx(x, y) { return this.at(Math.floor(x / TS), Math.floor(y / TS)); },
   set(tx, ty, c) { if (tx >= 0 && ty >= 0 && tx < this.w && ty < this.h) this.grid[ty][tx] = c; },
 
-  solidWalk(c) { return 'T#D~fSMXOLYZRWBVtkHC'.includes(c); },
-  solidFly(c) { return 'T#DSMXOLYZRWBVtkHC'.includes(c); },
-  blocksSight(c) { return 'T#DSMXOYZRWH'.includes(c); },   // кусты обзор не перекрывают: иначе звери в чаще слепнут
+  solidWalk(c) { return 'T#D~fSMXOLYZRWBVtkHCcd'.includes(c); },
+  solidFly(c) { return 'T#DSMXOLYZRWBVtkHCcd'.includes(c); },
+  blocksSight(c) { return 'T#DSMXOYZRWHd'.includes(c); },   // кусты обзор не перекрывают: иначе звери в чаще слепнут
 
   boxHits(x, y, hw, hh, fly) {
     const x0 = Math.floor((x - hw) / TS), x1 = Math.floor((x + hw - 0.01) / TS);
@@ -73,6 +73,7 @@ const World = {
         case 'B': return T.bedTop; case 'V': return T.bedFoot;
         case 't': return T.table; case 'k': return T.stove; case 'H': return T.shelf; case 'C': return T.chest;
         case 'r': return T.rug; case 'E': return T.exitMat;
+        case 'c': return T.counter; case 'd': return T.boardTile; case 'Q': return T.stoneFloor[h % 2];
         default: return T.floor[h % 2];
       }
     }
@@ -102,6 +103,7 @@ const World = {
       case 'O': return T.boulderTile;
       case 'L': return T.log;
       case 'q': return T.pebbles;
+      case 'y': return T.roadRut;
       case 'Y': return T.hutRoof;
       case 'Z': return T.hutWall;
       case 'D': return T.door;

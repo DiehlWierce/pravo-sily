@@ -67,6 +67,12 @@ const PALS = {
   washer: { h: '#5a3020', s: '#e0a888', e: '#1a1010', c: '#6a8aa0', x: '#e0e0e0', p: '#4a5a6a', b: '#2a2a2a' },
   fruiter: { h: '#303030', s: '#c89878', e: '#1a1010', c: '#5a7a3a', x: '#c0a030', p: '#3a3a2a', b: '#1e1e14' },
   clother: { h: '#7a4a8a', s: '#e0b898', e: '#1a1010', c: '#a05a7a', x: '#e0c0e0', p: '#4a3a4a', b: '#2a1e2a' },
+  carter: { h: '#5a4a2a', s: '#c89060', e: '#1a1010', c: '#6a5a3a', x: '#3a3020', p: '#4a3a24', b: '#2a2014' },
+  guard: { h: '#8a8a96', s: '#c09070', e: '#1a1010', c: '#4a5a7a', x: '#b0b8c8', p: '#2e3444', b: '#1a1e26' },
+  clerk: { h: '#2a2a2e', s: '#d8b088', e: '#1a1010', c: '#3a4a6a', x: '#c0a040', p: '#2a3040', b: '#1a1a20' },
+  barkeep: { h: '#6a3a20', s: '#e0b088', e: '#1a1010', c: '#8a6a4a', x: '#d8d0c0', p: '#5a4a34', b: '#2a2018' },
+  hunterB: { h: '#3a2a1a', s: '#b08860', e: '#1a1010', c: '#5a4a2a', x: '#8a7a40', p: '#3a3020', b: '#241c12' },
+  villager: { h: '#7a5a3a', s: '#d8a880', e: '#1a1010', c: '#6a6a5a', x: '#4a4a3a', p: '#4a4030', b: '#2a2418' },
   smith: { h: '#3a2a20', s: '#c08858', e: '#1a1010', c: '#5a3a24', x: '#8a8a90', p: '#3a2e22', b: '#241a12' },
   kindwoman: { h: '#b07040', s: '#e8c0a0', e: '#1a1010', c: '#b0a070', x: '#806a40', p: '#6a5a40', b: '#3a2a1a' },
 };
@@ -155,6 +161,20 @@ const Art = { spr: {}, tiles: {} };
   S.spike = spriteFrom(['Qqqqq'], { q: '#e0d4a8', Q: '#5a4a30' });
   // Значки шкал
   S.iconBolt = spriteFrom(['..yy', '.yy.', 'yyyy', '.yy.', 'yy..'], { y: '#ffd040' });
+  // Глава 2: повозка, лошадь, доска заказов, мешки
+  S.cart = spriteFrom([
+    '..wwwwwwwwww..', '.wwddddddddww.', 'wwddddddddddww', 'wwddddddddddww', '.wwddddddddww.',
+    '..wwwwwwwwww..', '.ii........ii.', 'iIIi......iIIi', 'iIIi......iIIi', '.ii........ii.',
+  ], { w: '#8a6a3a', d: '#5a4020', i: '#3a2a18', I: '#6a5a40' });
+  S.horse = spriteFrom([
+    '...........hh.', '..........hhhh', '.bbbbbbbbbbhem', 'bbbbbbbbbbbbbb', 'bbbbbbbbbbbb..',
+    '.bb.bb....bb..', '.bb.bb....bb..', '.dd.dd....dd..',
+  ], { b: '#6a4a30', h: '#4a3020', e: '#101010', m: '#2a1c14', d: '#2a1c14' });
+  S.board = spriteFrom([
+    'dddddddddddd', 'dwwwwwwwwwwd', 'dwppwwppwwwd', 'dwppwwppwwwd', 'dwwwwwwwwppd',
+    'dwppwwwwwppd', 'dwppwwwwwwwd', 'dddddddddddd', '..dd....dd..',
+  ], { d: '#4a3220', w: '#6a5030', p: '#e0d8c0' });
+  S.sack = spriteFrom(['..sss..', '.sssss.', 'ssssssd', 'ssssssd', 'sssssdd', '.sdddd.'], { s: '#b0a070', d: '#6a5a40' });
   S.iconCloud = spriteFrom(['.ggg..', 'gGgggg', 'gggggg', '.gg.g.'], { g: '#7ac04a', G: '#b8f070' });
 
   const heartRows = ['.rr.rr.', 'rRrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...'];
@@ -302,6 +322,23 @@ const Art = { spr: {}, tiles: {} };
     const cols = ['#5aa080', '#a05a5a', '#c0a050', '#6a6aa0'];
     for (let i = 0; i < 4; i++) { x.fillStyle = cols[(R() * 4) | 0]; x.fillRect(1 + i * 4, 1, 2, 4); x.fillStyle = cols[(R() * 4) | 0]; x.fillRect(2 + i * 4, 8, 2, 3); }
   });
+  T.roadRut = tile(x => {
+    speckle(x, '#6a5a44', ['#7a6a50', '#5a4a38', '#806e54'], 45);
+    x.fillStyle = '#4e4030'; x.fillRect(0, 3, 16, 2); x.fillRect(0, 11, 16, 2);
+    for (let i = 0; i < 5; i++) px(x, (R() * 16) | 0, (R() * 16) | 0, '#8a7a60');
+  });
+  T.stoneFloor = [0, 1].map(() => tile(x => {
+    x.fillStyle = '#4a4640'; x.fillRect(0, 0, 16, 16);
+    for (let yy = 0; yy < 16; yy += 8) for (let xx = (yy / 8) % 2 * 4; xx < 16; xx += 8) {
+      x.fillStyle = ['#5e5a52', '#565248', '#66625a'][(R() * 3) | 0]; x.fillRect(xx, yy, 7, 7);
+    }
+  }));
+  T.counter = tile(x => {
+    x.fillStyle = '#5a4030'; x.fillRect(0, 0, 16, 16);
+    x.fillStyle = '#8a6a44'; x.fillRect(0, 2, 16, 9); x.fillStyle = '#a88a5a'; x.fillRect(0, 2, 16, 2);
+    x.fillStyle = '#3a2a1a'; x.fillRect(0, 11, 16, 5);
+  });
+  T.boardTile = tile(x => { x.drawImage(T.wallFrontI, 0, 0); x.drawImage(Art.spr.board, 2, 3); });
   T.chest = tile(x => { floor(x); x.fillStyle = '#3a2410'; x.fillRect(2, 5, 12, 10); x.fillStyle = '#7a5028'; x.fillRect(3, 6, 10, 8); x.fillStyle = '#5a3818'; x.fillRect(3, 9, 10, 1); x.fillStyle = '#c0a040'; x.fillRect(7, 9, 2, 2); });
 })();
 

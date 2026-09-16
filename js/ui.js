@@ -100,6 +100,12 @@ const UI = {
     if (v.crystals) add('crystal', 'Кристаллы зверей', v.crystals, 'Тёплые, будто живые. Говорят, их носят дворяне и купцы, а стоят они целое состояние.');
     if (v.scroll) add('scroll', 'Обрывок свитка', 1, 'Потрёпанный, в пятнах крови и копоти. Нашёл в сумке охотника.', () => Story.readScroll(), 'scroll');
     if (v.pendant) add('pendant', 'Блестящая подвеска', 1, 'Тёплая на ощупь. Из-за неё всё и случилось.');
+    for (const id of (typeof Quests !== 'undefined' ? Quests.active() : [])) {
+      const d = QUEST_DEFS[id];
+      add('scroll', d.name, 0, `Заказ гильдии [${d.rank}]. ${d.desc}\nПрогресс: ${Quests.progress(id)}/${d.need}. Награда: ${d.coins} медяков.`);
+    }
+    E.push({ name: 'Продолжить игру', desc: 'Закрыть вещи и вернуться в игру.', sys: 'resume' });
+    E.push({ name: 'Начать игру', desc: 'Начать заново с самого начала. Текущее сохранение будет стёрто.', sys: 'newgame' });
     return E;
   },
   updateMenu() {
@@ -109,7 +115,16 @@ const UI = {
     m.sel = clamp(m.sel, 0, E.length - 1);
     if (Input.pressed('up')) { m.sel = (m.sel + E.length - 1) % E.length; Sfx.blip(); }
     if (Input.pressed('down')) { m.sel = (m.sel + 1) % E.length; Sfx.blip(); }
-    if (Input.pressed('a') && E[m.sel].use) { E[m.sel].use(); if (Game.reader || Game.dialog) Game.menu = null; }
+    const sel = E[m.sel];
+    if (Input.pressed('a') && sel.sys) {
+      Game.menu = null;
+      if (sel.sys === 'newgame') Game.choose('', 'Начать заново? Текущее сохранение будет стёрто.', [
+        { label: 'Да, начать заново', fn: () => { try { localStorage.removeItem(SAVE_KEY); } catch (e) { } Game.newGame(); } },
+        { label: 'Нет', fn: () => { } },
+      ]);
+      return;
+    }
+    if (Input.pressed('a') && sel.use) { sel.use(); if (Game.reader || Game.dialog) Game.menu = null; }
     if (Input.pressed('x')) {
       const k = E[m.sel].key;
       if (!k) Game.hint('Этот предмет нельзя повесить на быструю кнопку.', 2);
@@ -122,11 +137,12 @@ const UI = {
     const p = Game.player, E = this.invEntries(), m = Game.menu;
     bctx.fillStyle = '#000a'; bctx.fillRect(22, 44, 110, 3);
     bctx.fillStyle = '#c8b0ff'; bctx.fillRect(22, 44, Math.round(110 * p.xp / p.xpNext()), 3);
-    E.forEach((e, i) => {
-      const y = 62 + i * 13;
+    for (let i = 0; i < E.length; i++) {
+      const e = E[i], y = 62 + i * 13;
       if (i === m.sel) { bctx.fillStyle = 'rgba(255,224,128,0.12)'; bctx.fillRect(20, y - 5, 156, 12); }
+      if (!e.icon) continue;
       const img = Art.spr[e.icon]; drawSpr(bctx, img, 29 - img.width / 2, y + 1 - img.height / 2);
-    });
+    }
   },
   menuText() {
     const p = Game.player, E = this.invEntries(), m = Game.menu;
@@ -135,8 +151,8 @@ const UI = {
     text(`Сила ${p.stats.str} · Здоровье ${p.stats.hp} · Выносл. ${p.stats.sta}`, 22, 31, { size: 6, color: '#e8e0d0' });
     if (!E.length) text('Пусто. Только нож.', 26, 58, { size: 7, color: '#aaa' });
     E.forEach((e, i) => {
-      text(e.name, 38, 58 + i * 13, { size: 6.5, color: i === m.sel ? '#ffe080' : '#e8e0d0' });
-      text('×' + e.count, 172, 58 + i * 13, { size: 6.5, align: 'right', color: '#aaa' });
+      text(e.name, 38, 58 + i * 13, { size: 6.5, color: i === m.sel ? '#ffe080' : e.sys ? '#9ad8ff' : '#e8e0d0' });
+      if (e.count) text('×' + e.count, 172, 58 + i * 13, { size: 6.5, align: 'right', color: '#aaa' });
     });
     const sel = E[clamp(m.sel, 0, E.length - 1)];
     if (sel) {

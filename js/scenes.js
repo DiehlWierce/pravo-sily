@@ -209,6 +209,7 @@ const SCENES = {
         ['jumper', 100, 30, { lvl: 4 }], ['herb', 103, 26],
         ['campfire', 106, 22, { save: 'hut' }],
         ['door', 109, 19, { to: 'hut' }],
+        ['gateway', 113, 22, { to: 'road', at: [2, 20], label: 'на восток, к тракту' }],
         ['mark', 73, 22, { tag: 'bushes' }],
       ];
       for (const [, sx, sy] of spawns) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) protect.add(`${sx + dx},${sy + dy}`);
@@ -239,4 +240,214 @@ const SCENES = {
   }, [
     ['container', 8, 5, { name: 'старый сундук', loot: { meatCooked: 2, herbs: 1 } }],
   ]),
+
+  // ======================= ГЛАВА 2: ДОРОГА И ГОРОД =======================
+  // Тракт: длинная дорога с колеями, развилками и опасными обочинами
+  road: {
+    name: 'road', theme: 'forest', w: 124, h: 36, fill: 'T',
+    build(P) {
+      const { set, rect, circle, get, rng } = P;
+      const path = [[0, 20], [10, 22], [20, 18], [32, 14], [44, 17], [56, 22], [68, 26], [80, 22], [92, 16], [104, 19], [118, 22]];
+      const protect = new Set();
+      for (let i = 1; i < path.length; i++) {
+        const [ax, ay] = path[i - 1], [bx, by] = path[i], n = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 2;
+        for (let k = 0; k <= n; k++) {
+          const x = Math.round(lerp(ax, bx, k / n)), y = Math.round(lerp(ay, by, k / n));
+          for (let d = -2; d <= 2; d++) { set(x, y + d, Math.abs(d) <= 1 ? 'y' : '.'); protect.add(`${x},${y + d}`); }
+        }
+      }
+      // Обочины и привалы
+      circle(20, 26, 5, '.'); circle(46, 9, 5, '.'); circle(72, 30, 5, '.'); circle(96, 10, 5, '.');
+      const spawns = [
+        ['gateway', 1, 20, { to: 'forest', at: [110, 20], label: 'назад в чащу' }],
+        ['gateway', 122, 22, { to: 'camp', at: [3, 14], label: 'к дыму костра' }],
+        ['npc', 20, 26, { who: 'hunterB', role: 'roadHunter', face: 'r' }],
+        ['npc', 72, 30, { who: 'villager', role: 'pilgrim', face: 'l' }],
+        ['spiker', 40, 12, { lvl: 3 }], ['spiker', 62, 25, { lvl: 4 }], ['thrower', 88, 13, { lvl: 4 }],
+        ['boar', 28, 17, { lvl: 2 }], ['rabbit', 50, 20], ['rabbit', 84, 24], ['boar', 100, 22, { lvl: 2 }],
+        ['herb', 24, 27], ['herb', 94, 11], ['berries', 48, 10], ['berries', 76, 29],
+        ['campfire', 46, 9, { save: 'road' }],
+        ['crate', 21, 24], ['barrel', 22, 27], ['barrel', 95, 12],
+        ['container', 21, 24, { name: 'брошенный ящик', hold: 0.9, loot: { coins: 3 } }],
+        ['container', 95, 12, { name: 'бочку у обочины', hold: 0.9, loot: { herbs: 1 } }],
+      ];
+      for (const [, sx, sy] of spawns) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) protect.add(`${sx + dx},${sy + dy}`);
+      for (let y = 1; y < 35; y++) for (let x = 1; x < 123; x++) {
+        if (get(x, y) !== '.' || protect.has(`${x},${y}`)) continue;
+        const r = rng();
+        if (r < 0.06) set(x, y, 'T'); else if (r < 0.14) set(x, y, 'b'); else if (r < 0.17) set(x, y, 'O');
+        else if (r < 0.26) set(x, y, 'q'); else if (r < 0.4) set(x, y, ',');
+      }
+      return spawns;
+    },
+  },
+
+  // Стоянка извозчика: костёр, телега, мешки и разговор о проезде
+  camp: {
+    name: 'camp', theme: 'forest', w: 44, h: 28, fill: 'T',
+    build(P) {
+      const { set, rect, circle, get, rng } = P;
+      circle(20, 14, 10, '.'); rect(0, 12, 44, 16, '.');
+      for (let x = 0; x < 44; x++) set(x, 14, 'y');
+      const spawns = [
+        ['gateway', 1, 14, { to: 'road', at: [120, 22], label: 'назад на тракт' }],
+        ['gateway', 42, 14, { to: 'gate', at: [3, 14], label: 'к городским воротам' }],
+        ['npc', 18, 11, { who: 'carter', role: 'carter', face: 'r' }],
+        ['npc', 24, 18, { who: 'villager', role: 'campGuest', face: 'l' }],
+        ['campfire', 21, 15, { save: 'camp', lit: true }],
+        ['crate', 15, 12], ['barrel', 26, 12], ['barrel', 14, 17],
+        ['container', 15, 12, { name: 'мешки в телеге', hold: 1.2, loot: { coins: 2 }, watched: true, owners: ['carter'] }],
+        ['spiker', 33, 20, { lvl: 3, tag: 'campSpikerA' }], ['spiker', 30, 9, { lvl: 3, tag: 'campSpikerB' }],
+        ['herb', 12, 19], ['berries', 28, 8],
+        ['mark', 17, 13, { tag: 'cartSpot' }],
+      ];
+      for (let y = 1; y < 27; y++) for (let x = 1; x < 43; x++) {
+        if (get(x, y) !== '.') continue;
+        const r = rng();
+        if (r < 0.05) set(x, y, 'T'); else if (r < 0.12) set(x, y, 'b'); else if (r < 0.3) set(x, y, ',');
+      }
+      return spawns;
+    },
+  },
+
+  // Городские ворота: стража, очередь и щель в стене для тех, кому нечем платить
+  gate: {
+    name: 'gate', theme: 'slums', w: 40, h: 26, fill: '.',
+    build(P) {
+      const { set, rect } = P;
+      rect(0, 0, 39, 0, 'X'); rect(0, 25, 39, 25, 'X'); rect(0, 0, 0, 25, 'X');
+      rect(33, 0, 33, 25, 'X');                       // городская стена
+      rect(34, 11, 39, 16, ':');
+      rect(33, 12, 33, 14, 'f');                      // шлагбаум
+      rect(28, 20, 32, 20, 'f'); rect(28, 21, 28, 24, 'f');
+      set(33, 22, ',');                               // щель в стене за поленницей
+      rect(0, 12, 32, 16, ':');
+      const spawns = [
+        ['gateway', 1, 14, { to: 'camp', at: [41, 14], label: 'назад к стоянке' }],
+        ['gateway', 38, 13, { to: 'city', at: [3, 30], label: 'в город' }],
+        ['watcher', 31, 12, { who: 'guard', role: 'gateGuardA', look: [1.6, 3], angles: [Math.PI, Math.PI / 2, Math.PI] }],
+        ['watcher', 31, 16, { who: 'guard', role: 'gateGuardB', look: [1.8, 3.2], angles: [Math.PI, -Math.PI / 2, Math.PI] }],
+        ['npc', 24, 13, { who: 'villager', role: 'queueA', face: 'r' }],
+        ['npc', 23, 16, { who: 'kindwoman', role: 'queueB', face: 'r' }],
+        ['crate', 30, 21], ['barrel', 31, 23], ['crate', 20, 19],
+        ['container', 20, 19, { name: 'ящик у стены', hold: 0.9, loot: { coins: 2 }, watched: true }],
+        ['mark', 33, 22, { tag: 'crack' }],
+      ];
+      return spawns;
+    },
+  },
+
+  // Город: площадь, рынок, гильдия, таверна и жилые кварталы
+  city: {
+    name: 'city', theme: 'slums', w: 74, h: 50, fill: ':',
+    build(P) {
+      const { set, rect, get, rng } = P;
+      rect(0, 0, 73, 0, 'X'); rect(0, 49, 73, 49, 'X'); rect(0, 0, 0, 49, 'X'); rect(73, 0, 73, 49, 'X');
+      const spawns = [];
+      const blocks = [
+        [4, 4, 6, 4], [12, 3, 5, 5], [20, 5, 6, 4], [30, 3, 7, 5], [40, 4, 5, 4], [48, 3, 6, 5], [58, 5, 6, 4], [66, 4, 5, 5],
+        [4, 14, 5, 5], [12, 16, 6, 4], [22, 15, 5, 5], [58, 15, 6, 5], [66, 16, 5, 4],
+        [4, 26, 6, 5], [13, 27, 5, 4], [22, 26, 6, 5], [34, 28, 5, 4], [44, 26, 6, 5], [56, 27, 6, 4], [66, 26, 5, 5],
+        [6, 38, 6, 4], [16, 39, 5, 4], [26, 38, 6, 4], [38, 39, 6, 4], [50, 38, 5, 4], [60, 39, 6, 4],
+      ];
+      for (const [x, y, w, h] of blocks) {
+        const [dx, dy] = house(P, x, y, w, h, { locked: true, color: (x + y) % 4 });
+        spawns.push(['door', dx, dy, { locked: true }]);
+      }
+      // Гильдия и таверна — крупные здания с вывесками
+      const g = house(P, 30, 14, 8, 6, { door: 4, color: 1 });
+      const t = house(P, 42, 14, 7, 6, { door: 3, color: 2 });
+      spawns.push(['door', g[0], g[1], { to: 'guild' }], ['door', t[0], t[1], { to: 'tavern' }]);
+      // Площадь с фонтаном
+      rect(28, 24, 46, 34, ':'); rect(35, 28, 38, 30, '~');
+      // Рынок
+      rect(10, 8, 26, 12, ':'); rect(12, 10, 14, 10, 'S'); rect(18, 10, 20, 10, 'S'); rect(23, 10, 25, 10, 'S');
+      for (let i = 0; i < 120; i++) { const x = (rng() * 74) | 0, y = (rng() * 50) | 0; if (get(x, y) === ':' && rng() < 0.3) set(x, y, ','); }
+
+      spawns.push(
+        ['gateway', 2, 30, { to: 'gate', at: [37, 13], label: 'к воротам' }],
+        ['gateway', 71, 8, { to: 'hunt', at: [3, 20], label: 'в охотничьи угодья' }],
+        ['watcher', 13, 9, { who: 'baker', role: 'cityBaker', look: [1.6, 3], angles: [Math.PI / 2, 0, Math.PI] }],
+        ['watcher', 19, 9, { who: 'fruiter', role: 'cityFruiter', look: [1.4, 2.6], angles: [Math.PI / 2, Math.PI] }],
+        ['npc', 24, 9, { who: 'dealer', role: 'cityDealer', face: 'l' }],
+        ['npc', 34, 22, { who: 'clerk', role: 'crier', face: 'r' }],
+        ['npc', 44, 32, { who: 'villager', role: 'cityGossip', face: 'l' }],
+        ['npc', 20, 33, { who: 'boy', role: 'cityBoy', face: 'r' }],
+        ['watcher', 52, 30, { who: 'guard', role: 'cityGuard', look: [2, 3.5], angles: [Math.PI, Math.PI / 2, 0] }],
+        ['npc', 62, 22, { who: 'hunterB', role: 'cityHunter', face: 'l' }],
+        ['container', 12, 10, { watched: true, name: 'хлеб', icon: 'bread', owners: ['cityBaker'], loot: { bread: 1 } }],
+        ['container', 18, 10, { watched: true, name: 'яблоки', icon: 'apple', owners: ['cityFruiter'], loot: { goods: { name: 'Яблоки', value: 2, icon: 'apple' } } }],
+        ['crate', 28, 20], ['barrel', 50, 22], ['barrel', 16, 24], ['crate', 60, 34],
+        ['container', 28, 20, { name: 'ящик у стены', hold: 0.9, loot: { coins: 2 }, watched: true }],
+        ['container', 60, 34, { name: 'бочку', hold: 0.9, loot: { herbs: 1 }, watched: true }],
+        ['mark', 37, 20, { tag: 'guildDoor' }], ['mark', 45, 20, { tag: 'tavernDoor' }],
+      );
+      return spawns;
+    },
+  },
+
+  guild: room('guild', 18, 12, P => {
+    P.rect(1, 2, 16, 9, 'Q');
+    P.rect(4, 4, 12, 4, 'c');          // стойка
+    P.set(7, 1, 'd'); P.set(8, 1, 'd'); // доска заказов
+    P.rect(6, 8, 11, 8, 'r');
+    P.set(15, 3, 'C'); P.set(2, 3, 'H');
+  }, [
+    ['npc', 8, 3, { who: 'clerk', role: 'guildClerk', face: 'd' }],
+    ['npc', 14, 7, { who: 'hunterB', role: 'guildHunter', face: 'l' }],
+    ['npc', 3, 7, { who: 'guard', role: 'guildVeteran', face: 'r' }],
+    ['mark', 7, 2, { tag: 'board' }],
+  ]),
+
+  tavern: room('tavern', 16, 11, P => {
+    P.rect(2, 3, 5, 3, 'c');
+    P.set(9, 4, 't'); P.set(10, 4, 't'); P.set(9, 7, 't'); P.set(10, 7, 't');
+    P.set(13, 2, 'B'); P.set(13, 3, 'V');
+    P.set(2, 8, 'k'); P.rect(6, 6, 8, 6, 'r');
+  }, [
+    ['npc', 3, 2, { who: 'barkeep', role: 'barkeep', face: 'd' }],
+    ['npc', 9, 5, { who: 'hunterB', role: 'tavernHunter', face: 'r' }],
+    ['npc', 11, 8, { who: 'villager', role: 'tavernDrunk', face: 'l' }],
+    ['campfire', 2, 9, { save: 'tavern', lit: true }],
+  ]),
+
+  // Охотничьи угодья: сюда гильдия шлёт новичков
+  hunt: {
+    name: 'hunt', theme: 'forest', w: 84, h: 42, fill: 'T',
+    build(P) {
+      const { set, rect, circle, get, rng } = P;
+      const glades = [[8, 20, 6], [20, 12, 6], [30, 26, 7], [44, 16, 7], [56, 28, 6], [68, 18, 7], [76, 30, 5]];
+      for (const [x, y, r] of glades) circle(x, y, r, '.');
+      const path = [[0, 20], [10, 20], [20, 13], [30, 25], [42, 17], [56, 27], [68, 19], [80, 28]];
+      const protect = new Set();
+      for (let i = 1; i < path.length; i++) {
+        const [ax, ay] = path[i - 1], [bx, by] = path[i], n = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 2;
+        for (let k = 0; k <= n; k++) {
+          const x = Math.round(lerp(ax, bx, k / n)), y = Math.round(lerp(ay, by, k / n));
+          for (let d = -1; d <= 1; d++) { set(x, y + d, d === 0 ? ':' : (get(x, y + d) === 'T' ? '.' : get(x, y + d))); protect.add(`${x},${y + d}`); }
+        }
+      }
+      const spawns = [
+        ['gateway', 1, 20, { to: 'city', at: [69, 9], label: 'назад в город' }],
+        ['campfire', 10, 22, { save: 'hunt' }],
+        ['rabbit', 14, 18], ['rabbit', 22, 10], ['rabbit', 34, 28], ['rabbit', 48, 14], ['rabbit', 60, 30], ['rabbit', 72, 20],
+        ['boar', 18, 14, { lvl: 2 }], ['boar', 32, 24, { lvl: 3 }], ['boar', 58, 26, { lvl: 3 }], ['boar', 70, 16, { lvl: 3 }],
+        ['spiker', 26, 12, { lvl: 3 }], ['spiker', 44, 18, { lvl: 4 }], ['spiker', 66, 20, { lvl: 4 }],
+        ['jumper', 46, 14, { lvl: 4 }], ['jumper', 74, 30, { lvl: 5 }],
+        ['thrower', 56, 30, { lvl: 4 }], ['thrower', 78, 28, { lvl: 5 }],
+        ['herb', 12, 24], ['herb', 28, 28], ['herb', 43, 12], ['herb', 62, 26], ['herb', 70, 22], ['herb', 20, 9],
+        ['berries', 16, 22], ['berries', 50, 18], ['berries', 64, 32],
+      ];
+      for (const [, sx, sy] of spawns) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) protect.add(`${sx + dx},${sy + dy}`);
+      const sparse = glades.map(([x, y, r]) => [x, y, r - 1]);
+      for (let y = 1; y < 41; y++) for (let x = 1; x < 83; x++) {
+        if (get(x, y) !== '.' || protect.has(`${x},${y}`)) continue;
+        const k = sparse.some(([cx, cy, r]) => (x - cx) ** 2 + (y - cy) ** 2 < r * r) ? 0.3 : 1;
+        const r = rng();
+        if (r < 0.06 * k) set(x, y, 'T'); else if (r < 0.14 * k) set(x, y, 'b'); else if (r < 0.17 * k) set(x, y, 'O');
+        else if (r < 0.27) set(x, y, 'q'); else if (r < 0.4) set(x, y, ',');
+      }
+      return spawns;
+    },
+  },
 };
