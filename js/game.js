@@ -30,6 +30,7 @@ const Game = {
     this.loadScene('home');
     this.state = 'play';
     Story.start();
+    this.save();
   },
   loadScene(name, pos) {
     World.load(SCENES[name]);
@@ -52,8 +53,19 @@ const Game = {
     if (this.transition) return;
     this.transition = { t: 0, name, pos }; Sfx.blip();
   },
+  // Ищем свободное место рядом: иначе зверь или ягоды окажутся внутри дерева
+  freeSpot(x, y) {
+    if (!World.boxHits(x, y, 6, 5, false)) return { x, y };
+    for (let r = 1; r <= 4; r++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const nx = x + dx * r * TS, ny = y + dy * r * TS;
+      if (!World.boxHits(nx, ny, 6, 5, false)) return { x: nx, y: ny };
+    }
+    return { x, y };
+  },
   spawn(s) {
-    const [kind, tx, ty, o = {}] = s, x = tx * TS + 8, y = ty * TS + 10, id = s.id;
+    const [kind, tx, ty, o = {}] = s, id = s.id;
+    let x = tx * TS + 8, y = ty * TS + 10;
+    if (!['door', 'exit', 'mark', 'container', 'campfire'].includes(kind)) { const f = this.freeSpot(x, y); x = f.x; y = f.y; }
     const removed = this.removed.has(id);
     let e = null;
     switch (kind) {
@@ -158,6 +170,7 @@ const Game = {
   useCampfire(c) {
     const p = this.player;
     const rest = () => {
+      if (Story.canRest && !Story.canRest(c)) return;
       p.hp = p.maxHp; p.stamina = p.maxStamina;
       this.setCheckpoint(c.x, c.y + 14);
       Story.onRest(c);
@@ -188,6 +201,8 @@ const Game = {
   respawn() {
     const p = this.player;
     if (Story.onRespawn()) return;
+    // Смерть откатывает к последнему сохранению: добыча и убийства после него не засчитываются
+    if (this.hasSave()) { this.loadGame(); this.hint('Всё сначала — с последнего костра.', 3); return; }
     const c = this.checkpoint;
     Object.assign(p, { x: c.x, y: c.y, hp: p.maxHp, stamina: p.maxStamina, alive: true, invul: 1.5, kvx: 0, kvy: 0, dashT: 0 });
     this.objects = this.objects.filter(o => !o.temp);

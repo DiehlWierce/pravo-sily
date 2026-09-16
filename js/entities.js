@@ -295,6 +295,26 @@ class Enemy {
     stepTo(this, p.x, p.y, speed, dt);   // stepTo умеет скользить вдоль деревьев, а не упираться в них
     return true;
   }
+  // Шкура и кость держат нож, пока герой слаб: пробить можно ударом не слабее остатка здоровья зверя
+  guard(dmg, dx, dy, key, text) {
+    if (dmg >= this.hp) return false;
+    Sfx.clang(); FX.burst(this.x + dx * 6, this.y - 6, '#fff', 5, 45);
+    const p = Game.player; p.kvx = -dx * 150; p.kvy = -dy * 150;
+    Game.once(key, () => Game.hint(text, 4.5));
+    return true;
+  }
+  // Отталкивает героя, если тот лезет вплотную не вовремя
+  repel(dt) {
+    this.repelCd = Math.max(0, (this.repelCd || 0) - dt);
+    const p = this.tgt;
+    if (this.repelCd > 0 || !p.alive || (p.z || 0) > 4 || p.dashT > 0) return;
+    if (dist(p.x, p.y, this.x, this.y) > this.r + 9) return;
+    this.repelCd = 1.5;
+    const n = norm(p.x - this.x || 1, p.y - this.y);
+    p.kvx = n.x * 280; p.kvy = n.y * 280;
+    ring(this.x, this.y, 9, '#e8e0c8', 12); Sfx.push();
+    Game.once('repelHint', () => Game.hint('Он отшвыривает меня одним движением. Соваться вплотную нельзя.', 4));
+  }
   takeHit(dmg, src, dx, dy) {
     if (!this.alive) return;
     const kb = this.state === 'stunned' || this.state === 'panting' || this.state === 'tired' ? 25 : 100;
@@ -424,18 +444,15 @@ class Spiker extends Enemy {
   vulnerable() { return this.state === 'stunned' || this.state === 'panting' || this.state === 'gap'; }
   takeHit(dmg, src, dx, dy) {
     if (this.disguised) this.reveal();
-    if (src === 'knife' && !this.vulnerable()) {
-      Sfx.clang(); FX.burst(this.x + dx * 6, this.y - 6, '#fff', 4, 40);
-      Game.player.kvx = -dx * 130; Game.player.kvy = -dy * 130;
-      Game.once('spikerHide', () => Game.hint('Нож отскакивает от шкуры! Жди передышки после рывков или заставь врезаться в дерево.', 4));
-      return;
-    }
+    if (src === 'knife' && !this.vulnerable() && this.guard(dmg, dx, dy, 'spikerHide',
+      'Нож отскакивает от шкуры! Жди передышки после рывков или заставь врезаться в дерево.')) return;
     super.takeHit(dmg, src, dx, dy);
   }
   update(dt) {
     if (!this.baseUpdate(dt)) return;
     const p = this.tgt; this.t -= dt;
     if (this.disguised) { this.wander(dt, 12); if (p.alive && dist(p.x, p.y, this.x, this.y) < 56) this.reveal(); return; }
+    if (!this.vulnerable()) this.repel(dt);
     switch (this.state) {
       case 'idle':
         if (this.notices(this.sight)) { this.state = 'windup'; this.t = 0.32; this.chain = 0; break; }
@@ -488,6 +505,7 @@ class Jumper extends Enemy {
   }
   blastAt(x, y) {
     const r = this.blast;
+    if (this.scene) { ring(x, y, r, '#e0b060', 26); Sfx.thud(); FX.shake = Math.max(FX.shake, 4); return; }
     ring(x, y, r, this.big ? '#e0b060' : '#d8d0b8', this.big ? 30 : 20); Sfx.thud(); FX.shake = Math.max(FX.shake, this.big ? 5 : 3);
     const p = this.tgt;
     if (p.alive && (p.z || 0) < 4 && !(p.dashT > 0) && dist(p.x, p.y, x, y) < r) {
@@ -498,6 +516,7 @@ class Jumper extends Enemy {
   update(dt) {
     if (!this.baseUpdate(dt)) { if (this.state !== 'air') this.z = 0; return; }
     const p = this.tgt; this.t -= dt;
+    if (!this.vulnerable() && this.state !== 'air') this.repel(dt);
     switch (this.state) {
       case 'idle':
         if (this.t <= 0 && this.notices(this.sight)) { this.state = 'crouch'; this.t = 0.45; this.lr = p.x > this.x ? 'r' : 'l'; }
@@ -538,6 +557,16 @@ class Jumper extends Enemy {
     super.draw(ctx, cam);
   }
 }
+// Методы для постановочной сцены: прыжки и смерть по расписанию, без случайностей ИИ
+Jumper.prototype.sceneJump = function (x, y) {
+  this.from = { x: this.x, y: this.y }; this.to = { x, y };
+  this.state = 'air'; this.t = 0.62; this.airMax = 0.62; this.scene = true; Sfx.dash();
+};
+Jumper.prototype.sceneDie = function () {
+  this.alive = false; this.dead = true; this.state = 'dead'; this.z = 0;
+  FX.burst(this.x, this.y - 6, '#d8d0b8', 18, 70, 0.8); Sfx.thud(); FX.shake = 6;
+};
+
 class BigJumper extends Jumper {
   constructor(x, y, o) { super(x, y, o, { name: 'Большой костяной прыгун', sprite: 'bigJumper', hp: 5, dmg: 12, xp: 0, r: 12, hw: 9, hh: 5, big: true, reach: 110, sight: 220, blast: 34 }); this.hideLevel = true; }
 }

@@ -30,7 +30,7 @@ const PERSONAS = {
   dealer: { name: 'Скупщик', buys: true, talk: [['Скупщик', 'Хлам, краденое — беру всё. Только не говори никому, у кого взял.']] },
   junkwoman: { name: 'Старьёвщица', buys: true, talk: [['Старьёвщица', 'Тряпьё, железки — тащи, дам по медяку.'], ['Старьёвщица', 'Сама так и живу. Всю жизнь чужое старьё перебираю.']] },
   smith: {
-    name: 'Кузнец', shop: 'knife',
+    name: 'Кузнец',
     talk: [['Кузнец', 'Нож — пятнадцать медяков. Не торгуйся, я и так режу себе в убыток.'],
            ['Кузнец', 'В лес собрался? Там без железа делать нечего. Да и с железом, честно говоря, тоже.']],
   },
@@ -82,12 +82,10 @@ const Story = {
     this.step = 'slums'; Game.flags.chapter = 0;
     Game.showBanner('ГЛАВА 0', 'Трущобы', 3, '#e0c080');
     Game.after(0.6, () => Game.say([
-      { who: 'Мать', text: 'Кх-кх... Вернулся? Не ходи никуда, на улице сыро...' },
-      { who: 'Отец', text: 'Хлеба нет третий день. А у матери жар.' },
-      { who: 'Отец', text: 'Аптекарь просит двадцать медяков за настойку. Двадцать! У нас нет и двух.' },
-      { who: 'Я', text: 'Я достану.' },
-      { who: 'Отец', text: 'И нож себе купи у кузнеца. Без ножа ты в этом городе пустое место.' },
-      { who: 'Отец', text: 'Только не лезь к богатым, слышишь? Они не прощают.' },
+      { who: 'Мать', text: 'Кх-кх... Вернулся? Ты поел хоть что-нибудь?' },
+      { who: 'Отец', text: '(хрипло) Не суетись, мать. Хлеба нет третий день, вот и весь разговор.' },
+      { who: 'Отец', text: 'Сходи на рынок. Наскреби на три буханки — тебе, ей и мне.' },
+      { who: 'Я', text: 'Наскребу.' },
     ], () => {
       this.objectives();
       Game.hint('WASD — идти · Space — действие · Shift — рывок · J — нож · Enter — вещи', 6);
@@ -96,11 +94,22 @@ const Story = {
 
   objectives() {
     if (this.busy() || Game.flags.chapter !== 0) return;
-    const v = this.p.inv, parts = [];
-    if (!Game.flags.breadDone) parts.push(v.bread ? 'отнести хлеб домой' : 'хлеб (5)');
-    if (!this.p.hasKnife) parts.push('нож у кузнеца (15)');
-    if (!Game.flags.medDone) parts.push(v.medicine ? 'отнести лекарство домой' : 'лекарство у аптекаря (20)');
-    Game.objective = parts.length ? `Медяков: ${v.coins} · ` + parts.join(' · ') : 'Дома тихо. А на рынке у торговца что-то блестит...';
+    const v = this.p.inv, F = Game.flags, home = Game.tags.homeFront;
+    const toHome = () => { if (home) Game.waypoint = { x: home.x, y: home.y, label: 'дом' }; };
+    Game.waypoint = null;
+    if (!F.breadDone) {
+      if (v.bread >= 3) { Game.objective = 'Отнести хлеб домой'; toHome(); }
+      else Game.objective = `Купить три буханки у торговки: ${v.bread}/3 · медяков ${v.coins}/15`;
+      return;
+    }
+    if (!F.medDone) {
+      if (v.medicine) { Game.objective = 'Отнести лекарство матери'; toHome(); }
+      else Game.objective = `Накопить на лекарство: ${v.coins}/20 медяков`;
+      return;
+    }
+    if (!F.coinsGiven) { Game.objective = `Отдать отцу 5 медяков на хлеб (есть ${v.coins})`; toHome(); return; }
+    Game.objective = 'На рынок: у богатого торговца на виду блестит вещица';
+    const m = Game.tags.market; if (m) Game.waypoint = { x: m.x, y: m.y, label: 'рынок' };
   },
 
   // ---------- Разговоры ----------
@@ -136,13 +145,6 @@ const Story = {
       v.coins -= 20; v.medicine++; Sfx.coin(); this.objectives();
       Game.say([{ who: P.name, text: 'Вот склянка. По ложке утром и вечером. И не тряси — осадок.' }]);
     } });
-    if (P.shop === 'knife') choices.push({ label: 'Купить нож (15 медяков)', fn: () => {
-      if (this.p.hasKnife) { Game.say([{ who: P.name, text: 'Нож у тебя уже есть. Второй тебе не удержать.' }]); return; }
-      if (v.coins < 15) { Game.say([{ who: P.name, text: `Пятнадцать медяков. У тебя ${v.coins}. Иди работай.` }]); return; }
-      v.coins -= 15; this.p.hasKnife = true; Sfx.coin(); Game.flags.knifeDone = true; this.objectives();
-      Game.say([{ who: P.name, text: 'Держи. Рукоять перемотай тряпкой, иначе руку собьёшь.' },
-                { who: 'Я', text: 'Теперь я хотя бы не пустой.' }]);
-    } });
     if (P.buys) choices.push({ label: 'Продать хлам и краденое', fn: () => this.sell(n, P) });
     if (!P.buys && !P.shop) choices.push({ label: 'Предложить хлам', fn: () => Game.say([{ who: P.name, text: v.junk.length ? 'Мне твой мусор ни к чему. Скупщик на рынке берёт.' : 'У тебя и хлама-то нет.' }]) });
     choices.push({ label: 'Попросить денег', fn: () => {
@@ -170,34 +172,65 @@ const Story = {
   },
 
   talkMother() {
-    const v = this.p.inv;
-    if (v.medicine && !Game.flags.medDone) {
-      v.medicine = 0; Game.flags.medDone = true; Sfx.pick();
+    const v = this.p.inv, F = Game.flags;
+    if (v.medicine && F.breadDone && !F.medDone) {
+      v.medicine = 0; F.medDone = true; Sfx.pick();
       Game.say([
         { who: 'Я', text: 'Мам. Вот, выпей.' },
         { who: 'Мать', text: 'Кх... горько-то как... Откуда, сынок?' },
-        { who: 'Я', text: 'Работал.' },
-        { who: 'Мать', text: 'Ты у меня хороший. Кх-кх... Полежу немного.' },
-        { who: '', text: 'Кашель стал тише. Может, обойдётся.' },
-      ], () => this.objectives());
+        { who: 'Я', text: 'Заработал.' },
+        { who: 'Мать', text: 'Ты у меня хороший... Полежу немного...' },
+        { who: '', text: 'Кашель стал тише. Мать закрыла глаза и впервые за неделю уснула.' },
+        { who: 'Отец', text: 'Спит. Ты слышишь? Спит.' },
+        { who: 'Отец', text: 'Сынок... откуда деньги?' },
+        { who: 'Я', text: 'Нашёл работу.' },
+        { who: 'Отец', text: 'Врёшь. Но сегодня я не буду спрашивать.' },
+      ], () => { this.objectives(); Game.save(); });
       return;
     }
-    Game.say([{ who: 'Мать', text: Game.flags.medDone ? 'Мне полегче. Ты поел ли?' : 'Не смотри ты так. Кх-кх... Само пройдёт.' }]);
+    if (!F.breadDone) { Game.say([{ who: 'Мать', text: 'Не смотри ты так. Кх-кх... Само пройдёт.' }]); return; }
+    Game.say([{ who: 'Мать', text: F.medDone ? '(спит, дышит ровно)' : 'Мне бы полегчало, да настойка дорогая...' }]);
   },
+
   talkFather() {
-    const v = this.p.inv;
-    if (v.bread && !Game.flags.breadDone) {
-      v.bread = 0; Game.flags.breadDone = true; Sfx.pick();
+    const v = this.p.inv, F = Game.flags;
+    // Хлеб домой
+    if (!F.breadDone) {
+      if (v.bread < 3) { Game.say([{ who: 'Отец', text: 'Три буханки, сынок. Больше нам и не съесть.' }]); return; }
+      v.bread = 0; F.breadDone = true; Sfx.pick();
       Game.say([
-        { who: 'Я', text: 'Хлеб.' },
-        { who: 'Отец', text: 'Откуда?' },
-        { who: 'Я', text: 'Хлам продал.' },
-        { who: 'Отец', text: '...Ладно. Матери оставим больше.' },
-      ], () => this.objectives());
+        { who: 'Я', text: 'Держи. Три буханки.' },
+        { who: 'Отец', text: 'Три?.. Откуда?' },
+        { who: 'Я', text: 'Работал.' },
+        { who: 'Отец', text: '...Молодец. Правда молодец.' },
+        { who: 'Отец', text: 'Завтра сам выйду. Спина потерпит. Наскребу матери на лекарство.' },
+        { who: 'Мать', text: 'Куда ты с такой спиной! Лежи уж...' },
+        { who: 'Отец', text: 'Лежу, лежу.' },
+        { who: 'Я', text: '(про себя) Лекарство. Двадцать медяков. Он не встанет. Значит, я.' },
+      ], () => { this.objectives(); Game.save(); });
       return;
     }
-    if (Game.flags.medDone && Game.flags.breadDone) { Game.say([{ who: 'Отец', text: 'Ты своё сделал. Посиди дома хоть вечер.' }]); return; }
-    Game.say([{ who: 'Отец', text: 'Двадцать медяков, сынок. И хлеба бы. Только к богатым не лезь.' }]);
+    // Деньги на хлеб и подарок
+    if (F.medDone && !F.coinsGiven) {
+      if (v.coins < 5) { Game.say([{ who: 'Отец', text: 'Хлеба бы ещё. Пять медяков — и мы живём.' }]); return; }
+      v.coins -= 5; F.coinsGiven = true; this.p.hasKnife = true; Sfx.coin();
+      Game.say([
+        { who: 'Я', text: 'Вот пять медяков. На хлеб.' },
+        { who: 'Отец', text: 'Пять... Хватит на три дня.' },
+        { who: 'Отец', text: 'Ты вырос, пока я лежал. Я и не заметил, когда.' },
+        { who: '', text: 'Он долго шарил под лежанкой и вытащил нож в потёртых ножнах.' },
+        { who: 'Отец', text: 'Мой старый. Держи крепко, доставай редко.' },
+        { who: 'Я', text: '...Спасибо, пап.' },
+      ], () => {
+        Game.showBanner('НОЖ', 'теперь есть чем бить · J', 2.5, '#e8e0d0');
+        Game.say([{ who: 'Я', text: '(про себя) С ножом я уже не пустое место.' },
+                  { who: 'Я', text: '(про себя) А у богатого торговца на рынке лежит на виду блестящая вещица. Прямо просится в руку.' }],
+          () => { this.objectives(); Game.save(); });
+      });
+      return;
+    }
+    if (!F.medDone) { Game.say([{ who: 'Отец', text: 'Двадцать медяков за настойку. Двадцать! Где их взять...' }]); return; }
+    Game.say([{ who: 'Отец', text: 'Иди, сынок. Только к богатым не лезь — они не прощают.' }]);
   },
 
   // ---------- Кражи ----------
@@ -230,9 +263,10 @@ const Story = {
       const c = new Chaser(g.x, g.y, { who: 'thug', role: role + 'C', speed: 66, range: 96, half: 0.8, group: 'chase1' });
       Game.npcs.push(c); c.startChase(); c.alertT = 0.6;
     }
-    Game.waypoint = { x: Game.tags.hideout.x, y: Game.tags.hideout.y, label: 'укрытие' };
-    Game.objective = 'Оторваться от громил: добежать до щели за сараем';
-    Game.hint('Стрелка ведёт к укрытию. Shift — рывок, за углами они теряют след.', 5);
+    Game.waypoint = null; Game.flags.lostThem = false;
+    Game.save();
+    Game.objective = 'Оторваться от громил: скрыться из виду';
+    Game.hint('Пока они тебя видят, прятаться бесполезно. Петляй за домами и заборами. Shift — рывок.', 5.5);
   },
   endChase1() {
     this.step = 'sneak'; Game.waypoint = null;
@@ -256,12 +290,30 @@ const Story = {
       });
       Game.flags.sneakCp = { x: Game.tags.hideout.x, y: Game.tags.hideout.y };
       Game.waypoint = { x: Game.tags.homeFront.x, y: Game.tags.homeFront.y, label: 'дом' };
-      Game.objective = 'Вернуться домой незаметно';
+      Game.objective = 'Вернуться домой незаметно'; Game.save();
       Game.hint('Не попадайся в свет фонарей. Конус показывает, куда смотрят.', 4.5);
     });
   },
 
   onSpotted() { if (this.step === 'sneak') Game.hint('Заметили!', 1.5); },
+  // Пока громилы видят героя, укрытие не поможет; оторвался — появляется стрелка к щели
+  chaseUpdate(p) {
+    const cs = Game.npcs.filter(c => c.group === 'chase1' && c.active && !c.hidden);
+    const hot = cs.some(c => c.state === 'chase' || c.state === 'alert');
+    if (hot) {
+      if (Game.flags.lostThem) { Game.flags.lostThem = false; Game.objective = 'Снова заметили! Оторваться от громил'; }
+      Game.waypoint = null;
+      return;
+    }
+    const h = Game.tags.hideout;
+    if (!Game.flags.lostThem) {
+      Game.flags.lostThem = true;
+      Game.objective = 'Оторвался. Спрятаться в щели за сараем';
+      Game.hint('Они потеряли след. Теперь — в укрытие, пока не нашли.', 4);
+    }
+    Game.waypoint = { x: h.x, y: h.y, label: 'укрытие' };
+    if (dist(p.x, p.y, h.x, h.y) < 26) this.endChase1();
+  },
   onLost() { },
   onCaught(c) {
     const p = this.p, n = norm(p.x - c.x, p.y - c.y);
@@ -290,14 +342,15 @@ const Story = {
       { who: 'Я', text: 'Мама?.. Отец?..' },
       { who: '', text: 'Внутри всё перевёрнуто. Пусто. Только тёмные пятна на полу.' },
     ], () => {
-      const col = Game.addChaser(4, 35, { who: 'collector', group: 'flee', relentless: true, speed: 70, showCone: false, active: false });
+      const col = Game.addChaser(4, 35, { who: 'collector', group: 'flee', relentless: true, speed: 74, showCone: false, active: false });
       col.goalSpeed = 28;
       col.goal = {
         ...tc(4, 37), done: () => Game.say([
           { who: 'Сборщик', text: 'Вот и крысёныш. Долго же ты гулял.' },
-          { who: 'Сборщик', text: 'Твоя мать не знала, где вещь господина. А ты — знаешь.' },
-          { who: '', text: 'За спиной захлюпала грязь. Ещё двое.' },
-          { who: '', text: 'Беги.' },
+          { who: 'Сборщик', text: 'Твоя мать не знала, где вещь господина. Она долго не знала.' },
+          { who: 'Сборщик', text: 'Отдашь подвеску — умрёшь быстро. Побежишь — будем резать долго.' },
+          { who: '', text: 'За спиной захлюпала грязь. Ещё двое. У одного в руке крюк.' },
+          { who: 'Я', text: '(в голове только одно) БЕЖАТЬ! БЕЖАТЬ ПРОЧЬ!' },
         ], () => this.startFlee()),
       };
       Game.focus(col);
@@ -314,27 +367,47 @@ const Story = {
     const col = Game.npcs.find(n => n.who === 'collector');
     col.home = tc(4, 37); col.active = true; col.startChase(); col.alertT = 1.2;
     for (const [x, y] of [[1, 40], [14, 38]]) {
-      const t = Game.addChaser(x, y, { who: 'thug', group: 'flee', relentless: true, speed: 63, showCone: false });
+      const t = Game.addChaser(x, y, { who: 'thug', group: 'flee', relentless: true, speed: 72, showCone: false });
       t.startChase(); t.alertT = 1.5;
     }
     Game.setCheckpoint(tc(4, 37).x, tc(4, 37).y);
     Game.waypoint = { x: Game.tags.gate.x, y: Game.tags.gate.y, label: 'ворота' };
-    Game.objective = 'Бежать из города — к восточным воротам';
+    Game.objective = 'Бежать из города — к восточным воротам'; Game.save();
     Game.hint('Бегом! Стрелка ведёт к воротам. Shift — рывок.', 4);
   },
 
   // =====================================================================
   //                        ГЛАВА 1. ЧЁРНЫЙ ЛЕС
   // =====================================================================
+  // Завалы делят лес на этапы: дальше герой идёт, только пережив предыдущий
+  gates: {
+    g1: { x: 17, y0: 25, y1: 32 },
+    g2: { x: 46, y0: 10, y1: 18 },
+    g3: { x: 70, y0: 22, y1: 30 },
+    g4: { x: 88, y0: 11, y1: 19 },
+  },
+  applyGates() {
+    if (World.name !== 'forest') return;
+    for (const k in this.gates) {
+      const g = this.gates[k], open = !!Game.flags['open:' + k];
+      for (let y = g.y0; y <= g.y1; y++) World.set(g.x, y, open ? '.' : 'O');
+    }
+    // На время боя с охотником поляна закрывается, чтобы звери не лезли в драку
+    for (let y = 17; y <= 25; y++) World.set(74, y, Game.flags.arenaLock ? 'O' : '.');
+  },
+  openGate(k, msg) {
+    Game.flags['open:' + k] = true; this.applyGates();
+    FX.shake = 4; Sfx.thud();
+    if (msg) Game.hint(msg, 4);
+  },
+  respawnWildlife() {
+    for (const id of [...Game.removed]) if (/:(rabbit|boar):/.test(id)) Game.removed.delete(id);
+  },
+
   enterForest() {
     this.step = 'night1'; Game.flags.chapter = 1; Game.waypoint = null;
     const p = this.p; p.hp = Math.max(2, Math.ceil(p.maxHp / 2)); p.stamina = p.maxStamina * 0.3;
     Game.enterScene('forest', null);
-  },
-  // Завал на тропе: ночью герой дальше не идёт
-  openForestPath() {
-    for (let y = 27; y <= 33; y++) World.set(17, y, '.');
-    Game.flags.pathOpen = true;
   },
 
   onSceneLoad(name) {
@@ -344,8 +417,8 @@ const Story = {
       if (this.step === 'flee') for (let y = 6; y <= 8; y++) World.set(59, y, '.');
     }
     if (name === 'forest') {
+      this.applyGates();
       if (Game.flags.morning) World.tint = null;
-      if (Game.flags.pathOpen) this.openForestPath();
       if (!Game.flags.forestIntro) {
         Game.flags.forestIntro = true;
         Game.showBanner('ГЛАВА 1', 'Чёрный лес', 3, '#bff8ff');
@@ -355,7 +428,7 @@ const Story = {
           { who: 'Я', text: 'У меня только нож. И ночь впереди.' },
         ], () => {
           Game.objective = 'Поймать двух зайцев: 0/2';
-          Game.hint('Сначала еда. Зайцы удирают быстрее меня — загоняй их в угол или к камням.', 5);
+          Game.hint('Сначала еда. Зайцы удирают быстрее меня — загоняй их к камням и деревьям.', 5);
           Game.save();
         }));
       }
@@ -367,41 +440,73 @@ const Story = {
         { who: 'Я', text: 'Дверь запирается. Крыша есть. Можно жить.' },
         { who: '', text: 'В сумке звенели кристаллы мёртвых тварей, за поясом — чужой свиток.' },
         { who: 'Я', text: 'Я вернусь в город. Но уже не крысёнышем.' },
-      ], () => { Game.objective = 'Глава 1 пройдена. Хижина — твоя. Дальше будет Глава 2.'; Game.save(); Game.state = 'end'; }));
+      ], () => {
+        Game.showBanner('КОНЕЦ ГЛАВЫ 1', 'дальше — Глава 2: дорога в город', 4, '#bff8ff');
+        Game.objective = 'Глава 1 пройдена. Осмотрись в хижине — выйти в меню можно из вещей (Q).';
+        Game.save();
+      }));
     }
   },
 
-  // Костёр: шаги ночного обучения
+  // ---------- Костёр: обучение, привалы и ночёвки ----------
+  canRest() {
+    if (World.name !== 'forest') return true;
+    if (this.step === 'night3') { Game.hint('Спать на пустой желудок — не уснёшь. Сначала поесть.', 3); return false; }
+    if (this.step === 'night1' || this.step === 'night2') { Game.hint('Сначала еда и огонь.', 2.5); return false; }
+    return true;
+  },
   onCampfire(c, justLit) {
     if (justLit && this.step === 'night2') {
       this.step = 'night3';
       Game.objective = 'Пожарить мясо на костре и поесть';
       Game.hint('Space у костра — пожарить. Потом съесть: через вещи (Enter) или быструю кнопку E.', 5);
-      return false;
     }
     return false;
   },
-
-  onRest() {
-    if (World.name !== 'forest') return;
-    if (Game.flags.morning) return;
-    if (this.step !== 'night4') { Game.hint('Спать на пустой желудок — не уснёшь. Сначала поесть.', 3); return; }
-    Game.flags.morning = true; World.tint = null;
-    this.openForestPath();
-    Game.say([
-      { who: '', text: 'Я подбрасывал ветки до рассвета и вздрагивал от каждого хруста.' },
-      { who: '', text: 'Утро. Раны затянулись, в животе тепло. Жить можно.' },
-      { who: 'Я', text: 'Мяса надо впрок. И шкуры. Иначе дальше не уйти.' },
-    ], () => { this.step = 'hunt'; this.huntObjective(); Game.hint('Завал на тропе обошёл — дальше в лес дорога открыта.', 4); });
-  },
-  huntObjective() {
-    const r = Game.flags.rabbits || 0, b = Game.flags.boars || 0;
-    Game.objective = `Охота: зайцы ${Math.min(r, 5)}/5 · кабаны ${Math.min(b, 3)}/3`;
-  },
   onAte() {
     if (this.step === 'night3') { this.step = 'night4'; Game.objective = 'Поспать у костра (Отдохнуть)'; Game.hint('Теперь можно и поспать. Space у костра — Отдохнуть.', 4); }
+    if (this.step === 'restSpiker') { this.step = 'sleepSpiker'; Game.objective = 'Поспать у костра'; }
+    if (this.step === 'restHunter') { this.step = 'sleepHunter'; Game.objective = 'Поспать у костра'; }
+  },
+  onRest() {
+    if (World.name !== 'forest') return;
+    const p = this.p;
+    if (this.step === 'night4') {
+      Game.flags.morning = true; World.tint = null;
+      this.openGate('g1');
+      Game.say([
+        { who: '', text: 'Я подбрасывал ветки до рассвета и вздрагивал от каждого хруста.' },
+        { who: '', text: 'Утро. Раны затянулись, в животе тепло. Жить можно.' },
+        { who: 'Я', text: 'Мяса надо впрок. Зайцы, кабаны — что попадётся.' },
+      ], () => { this.step = 'hunt'; this.huntObjective(); Game.hint('Завал на тропе разобрал — дальше в лес дорога открыта.', 4); });
+      return;
+    }
+    if (this.step === 'sleepSpiker') {
+      this.respawnWildlife(); this.openGate('g2');
+      Game.say([
+        { who: 'Я', text: 'Эта тварь чуть не разорвала меня. Кабан... тоже мне кабан.' },
+        { who: '', text: 'Я жарил мясо, грел руки и слушал лес. Под утро стало не так страшно.' },
+        { who: 'Я', text: 'Живность вернулась к ручью. Значит, голодным не останусь.' },
+      ], () => { this.step = 'toJumper'; Game.objective = 'Идти глубже в лес, на восток'; });
+      return;
+    }
+    if (this.step === 'sleepHunter') {
+      this.respawnWildlife(); this.openGate('g4');
+      Game.say([
+        { who: '', text: 'Я спал у чужого костра, положив нож под руку.' },
+        { who: 'Я', text: 'Человек, который двигает камни взглядом. И я его свалил. Ножом.' },
+        { who: 'Я', text: 'Значит, и это не предел.' },
+      ], () => { this.step = 'deepForest'; Game.objective = 'Идти дальше в лес, на восток'; });
+      return;
+    }
+    Game.say([{ who: '', text: 'Я перевёл дух у огня. Раны затянулись.' }]);
+  },
+  huntObjective() {
+    const r = Math.min(Game.flags.rabbits || 0, 5), b = Math.min(Game.flags.boars || 0, 3);
+    Game.objective = `Охота: зайцы ${r}/5 · кабаны ${b}/3`;
   },
 
+  // ---------- Добыча ----------
   onKill(e) {
     if (e instanceof Rabbit || e instanceof Boar) Game.once('firstAnimal', () => Game.hint('Держи Space у туши — разделать.', 2.5));
     if (e instanceof Rabbit) {
@@ -409,68 +514,67 @@ const Story = {
       if (this.step === 'night1') {
         if (Game.flags.rabbits >= 2) { this.step = 'night2'; Game.objective = 'Разжечь костёр на опушке'; Game.hint('Мясо есть. Теперь костёр: Space у кострища.', 4); }
         else Game.objective = `Поймать двух зайцев: ${Game.flags.rabbits}/2`;
-      } else if (this.step === 'hunt') this.huntObjective();
+      } else if (this.step === 'hunt') this.checkHunt();
     }
-    if (e instanceof Boar || (e instanceof Spiker && e.tag === 'firstSpiker')) {
+    if (e instanceof Boar) {
       Game.flags.boars = (Game.flags.boars || 0) + 1;
-      if (this.step === 'hunt') {
-        this.huntObjective();
-        if ((Game.flags.rabbits || 0) >= 5 && Game.flags.boars >= 3) {
-          this.step = 'deeper'; Game.objective = 'Идти глубже в лес, на восток';
-          Game.hint('Мяса хватит. Пора вглубь.', 3);
-        }
-      }
+      if (this.step === 'hunt') this.checkHunt();
     }
-    if (e instanceof Spiker && !e.tag && e.x < 70 * TS && ['hunt', 'spiker1', 'spikers'].includes(this.step)) {
-      Game.flags.spikers = (Game.flags.spikers || 0) + 1;
-      if (Game.flags.spikers >= 2) { this.step = 'jumper'; Game.objective = 'Идти глубже в лес, на восток'; }
-      else Game.objective = `Шипогрызы в чаще: ${Game.flags.spikers}/2`;
+    if (e instanceof Spiker && e.tag === 'firstSpiker') {
+      this.step = 'restSpiker';
+      Game.objective = 'Вернуться к костру: пожарить мясо и поспать';
+      Game.hint('Сердце колотится. Надо к огню.', 3.5);
     }
-    if (e.tag === 'firstJumper') { this.step = 'toHunter'; Game.objective = 'Идти дальше на восток'; Game.hint('Еле справился. Эти твари с каждым разом страшнее.', 3); }
-    if (e instanceof BigJumper && Game.cutscene) this.afterBigJumper(e);
+    if (e.tag === 'firstJumper') {
+      this.step = 'toHunter'; this.openGate('g3');
+      Game.objective = 'Идти дальше на восток';
+      Game.hint('Тварь размером с телёнка — и я её свалил. Дальше тропа свободна.', 4);
+    }
+  },
+  checkHunt() {
+    this.huntObjective();
+    if ((Game.flags.rabbits || 0) >= 5 && (Game.flags.boars || 0) >= 3) {
+      this.step = 'fourth';
+      Game.objective = 'Добить четвёртого кабана в чаще';
+      Game.hint('Мяса хватит. Говорят, там в чаще ходит ещё один кабан.', 4);
+    }
   },
   onLoot(e) {
-    if (e.loot.meat && !e.loot.crystals) Game.once('firstMeat', () => Game.hint('Сырое мясо. Пожарить на костре (Space у костра), потом E — съесть.', 4));
-    if (e.loot.crystals) Game.once('firstCrystal', () => {
-      Game.say([
-        { who: '', text: 'Под рёбрами твари — кристалл. Тёплый. Пульсирует, будто ещё живой.' },
-        { who: 'Я', text: 'На рынке говорили: такие носят дворяне и купцы. Один такой — и лекарство, и еда на год...' },
-        { who: 'Я', text: '...если там ещё есть кого лечить.' },
-      ], () => { if (['hunt', 'forest', 'spiker1'].includes(this.step)) { this.step = 'spikers'; Game.objective = `Шипогрызы в чаще: ${Game.flags.spikers || 0}/2`; } });
-    });
+    if (e.loot.meat && !e.loot.crystals) Game.once('firstMeat', () => Game.hint('Сырое мясо. Пожарить на костре (Space у костра), потом съесть.', 4));
+    if (e.loot.crystals) Game.once('firstCrystal', () => Game.say([
+      { who: '', text: 'Под рёбрами твари — кристалл. Тёплый. Пульсирует, будто ещё живой.' },
+      { who: 'Я', text: 'На рынке говорили: такие носят дворяне и купцы. Один такой — и лекарство, и еда на год...' },
+      { who: 'Я', text: '...если там ещё есть кого лечить.' },
+    ]));
   },
   onSpikerReveal() {
     Game.showBanner('ШИПОГРЫЗ', 'зверь силы', 2.5, '#ff8070');
-    Game.once('spikerRevealHint', () => Game.hint('Это не кабан! Нож не берёт шкуру. Уворачивайся (Shift) и бей на передышке — или пусть врежется в дерево.', 5));
-    if (['forest', 'hunt'].includes(this.step)) this.step = 'spiker1';
+    Game.once('spikerRevealHint', () => Game.hint('Это не кабан! Нож не берёт шкуру, а вплотную он отшвыривает. Уворачивайся и бей на передышке.', 5.5));
   },
 
-  // ---------- Охотник ----------
+  // ---------- Охотник: постановочная сцена и бой ----------
   watchHunter() {
     Game.flags.hunterScene = true;
     const h = Game.tags.hunter, j = Game.tags.bigJumper, p = this.p;
     p.kvx = p.kvy = 0; p.moving = false;
     Game.cutscene = true; Game.focus({ x: 81 * TS, y: 17 * TS });
-    Game.say([{ who: '', text: 'Впереди грохот и хруст костей. Я нырнул в кусты и замер.' }], () => {
-      h.state = 'cutscene'; h.target = j; h.throwCd = 0.4;
-      j.target = h; j.sight = 340;
-      this.cutT = 0;
-    });
+    h.state = 'scene'; j.state = 'scene'; j.scene = true;
+    Game.say([{ who: '', text: 'Впереди грохот и хруст костей. Я нырнул в кусты и замер.' }], () => this.hunterScene());
   },
-  afterBigJumper(j) {
-    const h = Game.tags.hunter;
-    h.dropLifted(); h.state = 'panting'; h.target = null;
-    Game.after(1, () => {
-      h.goal = {
-        x: j.x - 12, y: j.y, done: () => {
-          h.state = 'panting';
-          Game.after(1.2, () => {
-            j.looted = true; j.loot.crystals = 0; Sfx.crystal(); FX.burst(j.x, j.y - 8, '#7cf0ff', 14, 60);
-            Game.after(1, () => this.hunterTalk());
-          });
-        },
-      };
-    });
+  // Сцена идёт по расписанию: так она не зависит от случайностей боя
+  hunterScene() {
+    const h = Game.tags.hunter, j = Game.tags.bigJumper;
+    const beat = (t, fn) => Game.after(t, fn);
+    beat(0.2, () => j.sceneJump(h.x - 34, h.y + 10));
+    beat(1.1, () => h.sceneThrow(j));
+    beat(2.0, () => j.sceneJump(h.x + 30, h.y - 6));
+    beat(2.9, () => h.sceneThrow(j));
+    beat(3.8, () => j.sceneJump(h.x - 26, h.y - 12));
+    beat(4.7, () => h.sceneThrow(j));
+    beat(5.6, () => { j.sceneDie(); h.state = 'panting'; FX.shake = 6; });
+    beat(6.6, () => { h.goal = { x: j.x - 12, y: j.y, done: () => { h.state = 'panting'; } }; });
+    beat(8.6, () => { j.looted = true; j.loot.crystals = 0; Sfx.crystal(); FX.burst(j.x, j.y - 8, '#7cf0ff', 16, 60); });
+    beat(10.0, () => this.hunterTalk());
   },
   hunterTalk() {
     const p = this.p;
@@ -478,7 +582,7 @@ const Story = {
       { who: 'Охотник', text: '(тяжело дыша) Хватит прятаться. Я слышу, как ты сопишь в кустах.' },
       { who: '', text: 'Я вышел.' },
     ], () => {
-      p.x = 75 * TS; p.y = 17 * TS + 10; p.lr = 'r'; p.face = { x: 1, y: 0 };
+      p.x = 76 * TS; p.y = 17 * TS + 10; p.lr = 'r'; p.face = { x: 1, y: 0 };
       Game.focus({ x: 77 * TS, y: 16 * TS });
       Game.choose('Охотник', 'Ну? Кто такой?', [
         { label: 'Я просто собираю ягоды.', fn: () => Game.say([
@@ -497,17 +601,24 @@ const Story = {
     const h = Game.tags.hunter, p = this.p;
     Game.cutscene = false; Game.focus(null);
     this.step = 'hunterFight'; Game.flags.hunterMet = true;
+    // Поляну закрываем и усыпляем зверей: драка один на один
+    Game.flags.arenaLock = true; this.applyGates();
+    for (const e of Game.enemies) {
+      if (e === h || !e.alive) continue;
+      Object.assign(e, { x: e.home.x, y: e.home.y, state: 'idle', t: 3, sightSaved: e.sight, sight: 0 });
+    }
     const rock = new Obj('rock', h.x + 6, h.y - 2), n = norm(p.x - rock.x, p.y - 18 - rock.y);
     rock.temp = true; rock.launch(n.x, n.y, 260, 220, 'hunter', true); rock.targets = [];
     Game.objects.push(rock); Sfx.throw(); FX.shake = 3;
     h.startFight(); h.throwCd = 1.6;
     Game.bossBar = h;
-    Game.setCheckpoint(p.x, p.y);
     Game.objective = 'Выстоять против охотника';
-    Game.hint('Камень просвистел у виска! Уворачивайся (Shift).', 3);
+    Game.hint('Камень просвистел у виска! Такой снесёт половину меня. Уворачивайся (Shift).', 4.5);
   },
   onHunterDown() {
     Game.bossBar = null; Game.flags.hunterDown = true; this.step = 'hunterLoot';
+    Game.flags.arenaLock = false; this.applyGates();
+    for (const e of Game.enemies) if (e.sightSaved) { e.sight = e.sightSaved; e.sightSaved = 0; }
     Game.after(0.8, () => Game.say([
       { who: 'Охотник', text: 'Кх... непользователь... меня?..' },
       { who: '', text: 'Он попытался подняться — и рухнул лицом в траву. Без сознания.' },
@@ -520,8 +631,8 @@ const Story = {
       { who: '', text: 'В сумке: два кристалла — видно, с прошлых охот — и обрывок свитка в пятнах копоти.' },
       { who: 'Я', text: 'Буквы... Половина смазана. Читать буду потом, при свете.' },
     ], () => {
-      this.step = 'afterHunter';
-      Game.objective = 'Идти дальше на восток';
+      this.step = 'restHunter';
+      Game.objective = 'Развести костёр рядом, поесть и поспать';
       Game.hint('Свиток лежит в вещах (Enter). Открыть его можно когда угодно.', 4.5);
     });
   },
@@ -571,25 +682,23 @@ const Story = {
   update(dt) {
     const p = this.p;
     if (World.name === 'slums') {
-      if (this.step === 'chase1') {
-        const hide = Game.tags.hideout;
-        const near = Game.npcs.some(c => c.group === 'chase1' && c.active && dist(c.x, c.y, p.x, p.y) < 70);
-        if (dist(p.x, p.y, hide.x, hide.y) < 26 && !near) this.endChase1();
-      }
+      if (this.step === 'chase1') this.chaseUpdate(p);
       if (this.step === 'sneak' && dist(p.x, p.y, Game.tags.homeFront.x, Game.tags.homeFront.y) < 22) this.ruinScene();
       if (this.step === 'flee' && p.x > 58.2 * TS) this.enterForest();
       if (Game.flags.ruined && rnd() < 0.25) FX.parts.push({ x: rrange(3, 7) * TS, y: rrange(33, 35) * TS, vx: rrange(-5, 5), vy: -rrange(10, 25), life: 1.2, max: 1.2, color: rnd() < 0.5 ? '#ff8030' : '#555', size: 1 });
       return;
     }
     if (World.name !== 'forest') return;
+    if (!Game.flags.morning && p.x > 14.5 * TS) Game.once('blockHint', () => Game.hint('Дальше завал и темень. Ночью в чащу лезть нельзя: сначала еда, костёр и сон.', 4.5));
+    if (this.step === 'fourth' && p.x > 28 * TS) Game.once('fourthHint', () => Game.hint('Где-то здесь бродит четвёртый. Кабан как кабан... наверное.', 4));
     if (p.x > 58 * TS && Game.tags.firstJumper && Game.tags.firstJumper.alive)
       Game.once('jumperBanner', () => { Game.showBanner('КОСТЯНОЙ ПРЫГУН', 'зверь силы', 2.5, '#ff8070'); Game.hint('Бьёт силой вокруг себя в прыжке и при приземлении. Круги показывают куда.', 5); });
     if (p.x > 71.5 * TS && !Game.flags.hunterScene && Game.tags.hunter) this.watchHunter();
-    if (this.cutT !== undefined && Game.cutscene && Game.tags.bigJumper && Game.tags.bigJumper.alive) {
-      this.cutT += dt;
-      if (this.cutT > 18) Game.tags.bigJumper.takeHit(99, 'object', 0, 0);
-    }
-    if (!Game.flags.morning && p.x > 14.5 * TS) Game.once('blockHint', () => Game.hint('Дальше — завал и темень. Ночью в чащу лезть нельзя: сначала еда, костёр и сон.', 4));
-    if (this.step === 'afterHunter' && p.x > 100 * TS) Game.once('hutHint', () => { Game.objective = 'Дойти до заброшенной хижины'; Game.hint('Впереди просвет между деревьями.', 3); });
+    if (this.step === 'deepForest' && p.x > 103 * TS) Game.once('hutSeen', () => {
+      Game.objective = 'Зайти в хижину';
+      Game.hint('Между деревьями — скат крыши. Заброшенная хижина.', 4);
+      const d = Game.props.find(o => o.to === 'hut');
+      if (d) Game.waypoint = { x: d.x, y: d.y, label: 'хижина' };
+    });
   },
 };

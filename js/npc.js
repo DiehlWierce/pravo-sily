@@ -217,10 +217,22 @@ class Hunter extends Enemy {
         if (p && p.alive !== false) this.lr = p.x > this.x ? 'r' : 'l';
         if (this.state === 'panting' && rnd() < 0.08) puff(this.x, this.y - 14, '#dde');
         break;
+      case 'hop':
+        this.t -= dt;
+        moveBody(this, this.hopDir.x * 230 * dt, this.hopDir.y * 230 * dt);
+        if (rnd() < 0.5) puff(this.x, this.y, '#8a7a5a');
+        if (this.t <= 0) { this.state = 'fight'; this.throwCd = 0.35; }
+        break;
       case 'cutscene': case 'fight': {
         if (!p || !p.alive) break;
         this.lr = p.x > this.x ? 'r' : 'l';
         const d = dist(p.x, p.y, this.x, this.y), n = norm(p.x - this.x, p.y - this.y);
+        this.hopCd = Math.max(0, (this.hopCd || 0) - dt);
+        if (this.state === 'fight' && d < 26) {   // подпустил вплотную — отшвыривает и отпрыгивает
+          const push = dist(p.x, p.y, this.x, this.y) < 18;
+          if (push) { p.kvx = -n.x * 320; p.kvy = -n.y * 320; Sfx.push(); FX.burst(this.x, this.y - 6, '#c878ff', 12, 60); }
+          if (this.hopCd <= 0) { this.hopCd = 3; this.state = 'hop'; this.t = 0.3; this.hopDir = { x: -n.x, y: -n.y }; this.dropLifted(); Sfx.dash(); break; }
+        }
         const want = d < 70 ? -1 : d > 120 ? 1 : 0;
         if (!this.lifted) { moveBody(this, (n.x * want * 42 - n.y * 18) * dt, (n.y * want * 42 + n.x * 18) * dt); this.moving = want !== 0; }
         this.throwCd -= dt;
@@ -238,12 +250,18 @@ class Hunter extends Enemy {
     }
   }
   lift() {
-    let best = null, bd = 160;
+    let best = null, bd = 130, far = null, fd = 1e9;
     for (const o of Game.objects) {
       if (o.state !== 'rest' || o.mass !== 'light') continue;
-      const d = dist(o.x, o.y, this.x, this.y); if (d < bd) { bd = d; best = o; }
+      const d = dist(o.x, o.y, this.x, this.y);
+      if (d < bd) { bd = d; best = o; }
+      if (d < fd) { fd = d; far = o; }
     }
-    if (!best) { best = new Obj('rock', this.x + rrange(-10, 10), this.y + 6); best.temp = true; Game.objects.push(best); Sfx.thud(); FX.burst(best.x, best.y, '#5e4630', 10, 50); }
+    if (!best) {   // камни кончились рядом — идёт за ближайшим, ничего не создавая
+      this.throwCd = 0.6;
+      if (far) this.goal = { x: far.x + rrange(-14, 14), y: far.y + 12, done: () => { this.throwCd = 0; } };
+      return;
+    }
     best.state = 'held'; best.owner = 'hunter'; this.lifted = best; this.t = 0.38; Sfx.grab();
   }
   throwAt(p) {
@@ -251,7 +269,7 @@ class Hunter extends Enemy {
     const lead = p.moving ? 0.22 : 0, pf = p.face || { x: 0, y: 0 };
     const n = norm(p.x + pf.x * 72 * lead - o.x, p.y - 3 + pf.y * 72 * lead - o.y);
     o.launch(n.x, n.y, this.state === 'cutscene' ? 190 : 215, 240, 'hunter', true);
-    o.temp = true; o.targets = [p];
+    o.dmg = 10; o.targets = [p];
     Sfx.throw();
     this.throwCd = this.state === 'cutscene' ? 0.7 : rrange(0.55, 0.95);
     if (this.state === 'fight' && ++this.thrown >= this.tireAfter) {
@@ -265,6 +283,16 @@ class Hunter extends Enemy {
     for (let i = 0; i < 24; i++) { const a = rnd() * 7, s = rrange(60, 160); FX.parts.push({ x: this.x, y: this.y - 5, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.35, max: 0.35, color: '#c878ff', size: 1 }); }
     if (dist(p.x, p.y, this.x, this.y) < 60) { const n = norm(p.x - this.x, p.y - this.y); p.kvx = n.x * 300; p.kvy = n.y * 300; }
     Game.once('hunterRecover', () => Game.hint('Пришёл в себя и отшвырнул меня. Снова уворачиваться.', 3));
+  }
+  // Бросок в постановочной сцене: камень летит в зверя и никого не ранит
+  sceneThrow(target) {
+    let best = null, bd = 1e9;
+    for (const o of Game.objects) { if (o.state !== 'rest' || o.mass !== 'light') continue; const d = dist(o.x, o.y, this.x, this.y); if (d < bd) { bd = d; best = o; } }
+    if (!best) return;
+    this.lr = target.x > this.x ? 'r' : 'l';
+    const n = norm(target.x - best.x, target.y - 4 - best.y);
+    best.launch(n.x, n.y, 210, 260, 'hunter', false);
+    Sfx.throw(); Sfx.grab();
   }
   startFight() { this.state = 'fight'; this.target = null; this.throwCd = 0.2; this.thrown = 0; this.tireAfter = 5; }
   draw(ctx, cam) {

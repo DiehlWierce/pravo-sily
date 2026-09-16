@@ -46,8 +46,8 @@ const SCENES = {
         [2, 14, 4, 3, 'soldier', 1], [8, 12, 3, 4], [13, 16, 4, 3], [18, 13, 3, 3],
         [24, 16, 4, 3, 'grumpy', 1], [30, 13, 3, 3], [35, 16, 4, 3],
         [2, 4, 3, 3], [7, 6, 4, 3], [13, 3, 3, 4], [18, 6, 4, 3], [24, 3, 3, 3, 'apothecary', 1],
-        [30, 5, 4, 3], [36, 2, 3, 3], [41, 5, 3, 3], [46, 2, 4, 3], [52, 5, 3, 3],
-        [50, 12, 4, 3], [54, 17, 3, 3], [46, 20, 4, 3], [53, 26, 4, 3],
+        [30, 5, 4, 3], [36, 2, 3, 3],
+        [54, 17, 3, 3], [46, 20, 4, 3], [53, 26, 4, 3], [35, 21, 4, 3], [24, 22, 3, 3],
       ];
       for (const [x, y, w, h, to, door] of homes) {
         const [dx, dy] = house(P, x, y, w, h, { locked: !to, door, color: to === 'home' ? 0 : undefined });
@@ -117,7 +117,7 @@ const SCENES = {
         ['container', 52, 6, { watched: true, name: 'яблоки', icon: 'apple', owners: ['fruiter'], loot: { goods: { name: 'Яблоки', value: 2, icon: 'apple' } } }],
         ['container', 45, 10, { watched: true, name: 'отрез ткани', icon: 'cloth', owners: ['clother'], loot: { goods: { name: 'Отрез ткани', value: 4, icon: 'cloth' } } }],
         ['container', 51, 10, { watched: true, name: 'блестящую подвеску', icon: 'pendant', owners: ['merchant', 'guardA', 'guardB'], hold: 1.4, loot: { pendant: true } }],
-        ['mark', 57, 41, { tag: 'hideout' }], ['mark', 59, 7, { tag: 'gate' }], ['mark', 4, 36, { tag: 'homeFront' }],
+        ['mark', 51, 12, { tag: 'market' }], ['mark', 57, 41, { tag: 'hideout' }], ['mark', 59, 7, { tag: 'gate' }], ['mark', 4, 36, { tag: 'homeFront' }],
       );
       return spawns;
     },
@@ -128,7 +128,7 @@ const SCENES = {
     P.set(10, 2, 'k'); P.set(6, 4, 't'); P.set(7, 4, 't'); P.set(10, 6, 'C'); P.rect(5, 6, 7, 6, 'r');
   }, [
     ['npc', 2, 3, { who: 'mother', role: 'mother', lying: true, face: 'r' }],
-    ['npc', 8, 4, { who: 'father', role: 'father', face: 'l', sit: true }],
+    ['npc', 4, 3, { who: 'father', role: 'father', lying: true, face: 'r' }],
   ]),
 
   widow: room('widow', 10, 8, P => {
