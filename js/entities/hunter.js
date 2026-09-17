@@ -12,7 +12,7 @@ class Hunter extends Enemy {
   constructor(x, y, o) {
     super(x, y, 'hunter', o);
     this.maxHp = BEASTS.hunter.hp; this.hp = this.maxHp; this.dmg = 1; this.xp = BEASTS.hunter.xp;
-    Object.assign(this, { who: 'hunter', keepBody: true, state: 'fight', throwCd: 1, thrown: 0, lifted: null, hitsInWindow: 0, tireAfter: 5, hates: [], moving: false });
+    Object.assign(this, { who: 'hunter', keepBody: true, state: 'fight', throwCd: 1, thrown: 0, lifted: null, hitsInWindow: 0, tireAfter: 5, hates: [], moving: false, strafe: 1, stuckT: 0, sinceThrow: 0 });
   }
   get boss() { return this.hates.includes('player'); }
   forceGlow() {
@@ -79,12 +79,28 @@ class Hunter extends Enemy {
     this.flashT = Math.max(0, this.flashT - dt);
     this.auraT = Math.max(0, this.auraT - dt);
     updateKnockback(this, dt);
+    this.unstick();
     this.moving = false;
     if (this.dead) { if (this.looted) { this.fade -= dt; if (this.fade <= 0) this.remove = true; } return; }
     if (this.dormant) return;
-    if (this.goal) { if (Nav.go(this, this.goal.x, this.goal.y, 45, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); } return; }
+    if (this.goal) {
+      this.goalT = (this.goalT || 0) - dt;
+      if (Nav.go(this, this.goal.x, this.goal.y, 45, dt)) { const cb = this.goal.done; this.goal = null; cb && cb(); }
+      else if (this.goalT <= 0) { this.goal = null; this.tearStone(); }   // за камнем не дойти — вырвет свой
+      else return;
+    }
     if (this.lifted) { this.lifted.tx = this.x + (this.lr === 'r' ? 7 : -7); this.lifted.ty = this.y - 2; this.lifted.carryZ = 14; }
     this.t -= dt;
+    // Если охотник долго не может бросить камень (упёрся, не дотянулся), он выдыхается сам —
+    // иначе бой становится непроходимым: поля силы не пробить, пока он не устал
+    if (this.state === 'fight' || this.goal) {
+      this.sinceThrow = (this.sinceThrow || 0) + dt;
+      if (this.sinceThrow > 8) {
+        this.sinceThrow = 0; this.dropLifted(); this.goal = null;
+        this.state = 'tired'; this.t = 2.3; this.thrown = 0; this.hitsInWindow = 0;
+        if (this.boss) Game.hint('Он надорвался, вырывая камень. Сейчас!', 2.5);
+      }
+    } else this.sinceThrow = 0;
     switch (this.state) {
       case 'loot': {
         const c = this.corpse;
@@ -129,7 +145,16 @@ class Hunter extends Enemy {
         // Со зверем бьётся на своей поляне: далеко от неё не уходит
         const hd = dist(this.x, this.y, this.home.x, this.home.y), hn = norm(this.home.x - this.x, this.home.y - this.y);
         const pull = !this.boss && hd > 80 ? Math.min(1.5, (hd - 80) / 40) * 40 : 0;
-        if (!this.lifted) { moveBody(this, (n.x * want * 42 - n.y * 18 + hn.x * pull) * dt, (n.y * want * 42 + n.x * 18 + hn.y * pull) * dt); this.moving = want !== 0 || pull > 0; }
+        if (!this.lifted) {
+          if (d > 130 || this.stuckT > 0.6) { Nav.go(this, p.x, p.y, 48, dt); this.moving = true; }   // далеко или упёрся — идёт в обход
+          else {
+            const vx = n.x * want * 42 - n.y * 18 * this.strafe + hn.x * pull;
+            const vy = n.y * want * 42 + n.x * 18 * this.strafe + hn.y * pull;
+            if (moveBody(this, vx * dt, vy * dt)) this.strafe = -this.strafe;   // упёрся в дерево — обходит с другой стороны
+            this.moving = want !== 0 || pull > 0;
+          }
+        }
+        this.trackStuck(dt);
         this.throwCd -= dt;
         if (!this.lifted && this.throwCd <= 0) this.lift();
         else if (this.lifted && this.t <= 0) this.throwAt(p);
@@ -144,21 +169,57 @@ class Hunter extends Enemy {
         break;
     }
   }
-  // Поднять силой ближайший лежащий камень. Рядом нет — идёт к дальнему, ничего не создавая
+  // Сдвинулся ли он на самом деле: если давит в дерево на месте — пойдёт в обход
+  trackStuck(dt) {
+    this.stuckCheck = (this.stuckCheck || 0) + dt;
+    if (this.stuckCheck < 0.35) return;
+    const moved = this.lastPos ? dist(this.x, this.y, this.lastPos.x, this.lastPos.y) : 99;
+    this.stuckT = this.moving && moved < 3 ? (this.stuckT || 0) + this.stuckCheck : 0;
+    this.lastPos = { x: this.x, y: this.y }; this.stuckCheck = 0;
+  }
+  // До камня надо ещё дойти: за завалом или за деревьями он бесполезен
+  reachable(o) {
+    if (Nav.clear(this, o.x, o.y)) return true;
+    const path = Nav.find(this.x, this.y, o.x, o.y);
+    return !!path && !path.partial;
+  }
+  // Поднять силой лежащий камень. Рядом нет — идёт к дальнему; совсем нет — вырывает камень из земли
   lift() {
-    let best = null, bd = 130, far = null, fd = 1e9;
+    let best = null, bd = 130, walk = null, wd = 1e9;
     for (const o of Game.objects) {
       if (o.state !== 'rest' || o.mass !== 'light') continue;
       const d = dist(o.x, o.y, this.x, this.y);
-      if (d < bd) { bd = d; best = o; }
-      if (d < fd) { fd = d; far = o; }
+      if (d < bd && this.reachable(o)) { bd = d; best = o; }
+      if (d < wd && d >= 130 && this.reachable(o)) { wd = d; walk = o; }
     }
     if (!best) {
       this.throwCd = 0.6;
-      if (far) this.goal = { x: far.x + rrange(-14, 14), y: far.y + 12, done: () => { this.throwCd = 0; } };
+      if (walk) { this.goal = { x: walk.x, y: walk.y + 10, done: () => { this.throwCd = 0; } }; this.goalT = 4; }
+      else this.tearStone();
       return;
     }
     best.state = 'held'; best.owner = this; this.lifted = best; this.t = 0.38; Sfx.grab(); this.pulseForce(0.4);
+  }
+  // Камней вокруг не осталось — выворачивает силой валун или кусок земли рядом с собой
+  tearStone() {
+    const tx = tileOf(this.x), ty = tileOf(this.y);
+    let spot = null;
+    for (let r = 1; r <= 6 && !spot; r++) for (let dy = -r; dy <= r && !spot; dy++) for (let dx = -r; dx <= r && !spot; dx++) {
+      const x = tx + dx, y = ty + dy;
+      if (World.at(x, y) === 'O' && Nav.free(x, y + 1)) spot = { x, y, boulder: true };
+    }
+    if (spot) World.set(spot.x, spot.y, '.');
+    else {
+      Nav.ensure();
+      for (let r = 1; r <= 4 && !spot; r++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]])
+        if (!spot && Nav.free(tx + dx * r, ty + dy * r)) spot = { x: tx + dx * r, y: ty + dy * r };
+    }
+    if (!spot) return;
+    const pos = tc(spot.x, spot.y), rock = new Obj('rock', pos.x, pos.y);
+    Game.objects.push(rock);
+    FX.burst(pos.x, pos.y, spot.boulder ? '#9a9a94' : '#6a5a44', 14, 60); FX.ring(pos.x, pos.y, 8, FORCE.push.color, 12);
+    Sfx.thud(); this.pulseForce(0.6); this.throwCd = 0.3;
+    if (this.boss) Game.once('hunterTear', () => Game.hint('Камни кончились — он вырывает новый прямо из земли.', 3.5));
   }
   throwAt(p) {
     const o = this.lifted; this.lifted = null;
@@ -167,6 +228,7 @@ class Hunter extends Enemy {
     o.launch(n.x, n.y, 215, 240, this, true);
     o.dmg = BEASTS.hunter.rockDamage; o.targets = null;
     Sfx.throw(); this.pulseForce(0.4);
+    this.sinceThrow = 0;
     this.throwCd = rrange(0.55, 0.95);
     if (++this.thrown >= this.tireAfter) {
       this.state = 'tired'; this.t = 2.3; this.thrown = 0; this.hitsInWindow = 0; this.tireAfter = 5 + ((rnd() * 3) | 0);

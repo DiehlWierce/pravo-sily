@@ -141,6 +141,39 @@
     ok('охотник повержен, поляна открыта', Game.flags.hunterDown && !Game.flags.arenaLock);
     Game.player.x = h.x + 8; Game.player.y = h.y; h.interaction(Game.player).done(); skip();
     ok('свиток и кристаллы', Inv.count('scroll') === 1 && Inv.count('crystals') >= 2);
+
+    // Бой с охотником должен быть проходим даже в худших условиях: он зажат у деревьев и камней рядом нет
+    Object.assign(Game.flags, { hunterDown: false, hunterLooted: false, hunterMet: false, arenaLock: false, step: 'toHunter', duelDone: true });
+    Game.removed.delete('forest:hunter:79,15');
+    Game.loadScene('forest'); skip();
+    const H = Game.tags.hunter, hero = Game.player;
+    Game.objects = Game.objects.filter(o => o.mass !== 'light');   // все камни убрали
+    Chapter1.startHunterFight(); skip();
+    H.x = 73 * TS + 4; H.y = 18 * TS;   // зажат у завала
+    let tired = 0, last = '', threw = 0;
+    const origThrow = H.throwAt.bind(H); H.throwAt = (t) => { threw++; return origThrow(t); };
+    Game.flags.godmode = true;
+    run(30, () => { if (H.state === 'tired' && last !== 'tired') tired++; last = H.state; tp(80, 20); return tired >= 2; });
+    ok('зажатый охотник всё равно выдыхается и не блокирует главу', tired >= 1, `устал ${tired} раз, бросков ${threw}`);
+    ok('камни кончились — охотник вырывает новые из земли', Game.objects.some(o => o.mass === 'light'), `камней ${Game.objects.filter(o => o.mass === 'light').length}`);
+    // Внутри дерева тело не может сдвинуться ни на пиксель — должен выбираться сам
+    const tree = [];
+    for (let y = 10; y < 26 && !tree.length; y++) for (let x = 75; x < 87 && !tree.length; x++) if (World.at(x, y) === 'T') tree.push(x, y);
+    if (tree.length) { const c = tc(tree[0], tree[1]); H.x = c.x; H.y = c.y; run(0.5); }
+    ok('охотник выбирается, если оказался в дереве', !tree.length || !World.boxHits(H.x, H.y, H.hw, H.hh, false), `${(H.x / TS).toFixed(1)},${(H.y / TS).toFixed(1)}`);
+    // В самом бою он не должен стоять столбом дольше пары секунд
+    let frozen = 0, maxFrozen = 0, lastPos = { x: H.x, y: H.y }, ticks = 0;
+    run(20, () => {
+      tp(80, 20);
+      if (++ticks % 30) return false;
+      frozen = H.state === 'fight' && dist(H.x, H.y, lastPos.x, lastPos.y) < 2 ? frozen + 0.5 : 0;
+      maxFrozen = Math.max(maxFrozen, frozen); lastPos = { x: H.x, y: H.y };
+      return false;
+    });
+    ok('охотник не стоит столбом в бою', maxFrozen <= 4, `${maxFrozen}с без движения`);
+    H.state = 'tired'; H.t = 3; H.takeHit(99, 'knife', 1, 0, hero); run(1); skip();
+    ok('в усталости охотника можно добить', Game.flags.hunterDown);
+    Game.flags.godmode = false;
   });
 
   // ---------- Глава 2 ----------

@@ -123,11 +123,19 @@ class Enemy {
     };
   }
 
+  // Оказался внутри дерева или стены (завал, толчок, сдвиг карты) — выбираемся на свободное место,
+  // иначе тело не может сдвинуться ни на пиксель и бой встаёт намертво
+  unstick() {
+    if (!World.boxHits(this.x, this.y, this.hw, this.hh, false)) return;
+    const f = Game.freeSpot(this.x, this.y);
+    this.x = f.x; this.y = f.y; this.nav = null;
+  }
   // Общее для всех: отбрасывание, оглушение, смерть. false — дальше ИИ не думает
   baseUpdate(dt) {
     this.flashT = Math.max(0, this.flashT - dt);
     this.auraT = Math.max(0, this.auraT - dt);
     updateKnockback(this, dt);
+    this.unstick();
     if (this.dead) { if (this.looted) { this.fade -= dt; if (this.fade <= 0) this.remove = true; } return false; }
     if (this.dormant) return false;
     this.retarget(dt);
